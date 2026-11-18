@@ -1,0 +1,2027 @@
+{
+  "source": "Purchasing system - purchased_order extract (FICTIONAL DATA)",
+  "load_type": "incremental",
+  "extracted_at": "2026-11-15T17:30:00+10:00",
+  "record_count": 20,
+  "purchased_orders": [
+    {
+      "OrderNumber": "PO1040067",
+      "OrderType": "Blanket",
+      "OrderStatus": "Sent",
+      "CreationTime": "2026-06-24T00:41:11Z",
+      "LastUpdated": "2026-11-15T06:59:01+10:00",
+      "SupplierCode": "SUP1004",
+      "SupplierName": "Ryde Catering Co",
+      "Creator": "c.patel",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 801.14,
+      "TaxSum": 80.11,
+      "GrossSum": 881.25,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "1",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 801.14,
+          "NetSum": 801.14,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 80.11,
+          "GrossSum": 881.25,
+          "DesiredDeliveryDate": "2026-08-02",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040055",
+      "OrderType": "Standard",
+      "OrderStatus": "Sent",
+      "CreationTime": "2026-02-24T19:54:54Z",
+      "LastUpdated": "2026-11-14T21:30:00Z",
+      "SupplierCode": "SUP1005",
+      "SupplierName": "Parramatta Furniture Group",
+      "Creator": "b.smith",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 4190.21,
+      "TaxSum": 413.87,
+      "GrossSum": 4604.08,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "1.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1380.24,
+          "NetSum": 1380.24,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 138.02,
+          "GrossSum": 1518.26,
+          "DesiredDeliveryDate": "2026-03-11",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC2200",
+              "CostCenterName": "Property",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Centrifuge tubes (pack)",
+          "CategoryCode": "LAB",
+          "CategoryName": "Laboratory Supplies",
+          "Quantity": "1.000",
+          "QuantityUnit": "PK",
+          "NetUnitPrice": 53.73,
+          "NetSum": 53.73,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 5.37,
+          "GrossSum": 59.1,
+          "DesiredDeliveryDate": "2026-03-26",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": "PRJ-25003"
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "30",
+          "LineStatus": "Open",
+          "Description": "Centrifuge tubes (pack)",
+          "CategoryCode": "LAB",
+          "CategoryName": "Laboratory Supplies",
+          "Quantity": "1",
+          "QuantityUnit": "PK",
+          "NetUnitPrice": 51.51,
+          "NetSum": 51.51,
+          "TaxCode": "GSTFREE",
+          "TaxPercent": 0,
+          "TaxTotal": 0.0,
+          "GrossSum": 51.51,
+          "DesiredDeliveryDate": "2026-03-13",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "40",
+          "LineStatus": "Open",
+          "Description": "Event catering",
+          "CategoryCode": "CATR",
+          "CategoryName": "Catering",
+          "Quantity": "1.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2071.28,
+          "NetSum": 2071.28,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 207.13,
+          "GrossSum": 2278.41,
+          "DesiredDeliveryDate": "2026-03-21",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55100",
+              "AccountName": "Catering & Hospitality",
+              "CostCenterCode": "CC1300",
+              "CostCenterName": "Faculty of Arts",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "50",
+          "LineStatus": "Open",
+          "Description": "Docking station",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "3",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 211.15,
+          "NetSum": 633.45,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 63.35,
+          "GrossSum": 696.8,
+          "DesiredDeliveryDate": "2026-03-30",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": "PRJ-24017"
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040017",
+      "OrderType": "Standard",
+      "OrderStatus": "PartiallyReceived",
+      "CreationTime": "2026-06-28T10:52:46+10:00",
+      "LastUpdated": "2026-11-14T22:00:00Z",
+      "SupplierCode": "SUP1001",
+      "SupplierName": "Harbourside Office Supplies Pty Ltd",
+      "Creator": "c.patel",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 8932.59,
+      "TaxSum": 893.26,
+      "GrossSum": 9825.85,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Monitor 27in",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "5.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 459.32,
+          "NetSum": 2296.6,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 229.66,
+          "GrossSum": 2526.26,
+          "DesiredDeliveryDate": "2026-08-04",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700032",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-07-14",
+              "ReceivedQuantity": 2,
+              "ReceivedNetSum": 918.64,
+              "Recipient": "b.smith"
+            }
+          ]
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "1000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1.87,
+          "NetSum": 1870.0,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 187.0,
+          "GrossSum": 2057.0,
+          "DesiredDeliveryDate": "2026-08-03",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC1200",
+              "CostCenterName": "Business School",
+              "ProjectCode": "PRJ-25003"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700033",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-07-20",
+              "ReceivedQuantity": 250,
+              "ReceivedNetSum": 467.5,
+              "Recipient": "c.patel"
+            },
+            {
+              "GoodsReceiptNumber": "GR700034",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-07-24",
+              "ReceivedQuantity": 250,
+              "ReceivedNetSum": 467.5,
+              "Recipient": "d.chen"
+            }
+          ]
+        },
+        {
+          "LineNumber": "30",
+          "LineStatus": "Open",
+          "Description": "Consulting services",
+          "CategoryCode": "CONS",
+          "CategoryName": "Consulting Services",
+          "Quantity": "8",
+          "QuantityUnit": "HR",
+          "NetUnitPrice": 264.23,
+          "NetSum": 2113.84,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 211.38,
+          "GrossSum": 2325.22,
+          "DesiredDeliveryDate": "2026-07-25",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "54100",
+              "AccountName": "Consultancy Fees",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700035",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-07-09",
+              "ReceivedQuantity": 4,
+              "ReceivedNetSum": 1056.92,
+              "Recipient": "b.smith"
+            }
+          ]
+        },
+        {
+          "LineNumber": "40",
+          "LineStatus": "Open",
+          "Description": "Ergonomic chair",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "3.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 884.05,
+          "NetSum": 2652.15,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 265.22,
+          "GrossSum": 2917.37,
+          "DesiredDeliveryDate": "2026-07-21",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC1400",
+              "CostCenterName": "Faculty of Medicine, Health & Human Sciences",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700036",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-07-23",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 884.05,
+              "Recipient": "c.patel"
+            },
+            {
+              "GoodsReceiptNumber": "GR700189",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 2.0,
+              "ReceivedNetSum": 1768.1,
+              "Recipient": "e.williams"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040100",
+      "OrderType": "Standard",
+      "OrderStatus": "Sent",
+      "CreationTime": "2026-11-15T06:30:00+10:00",
+      "LastUpdated": "2026-11-15T09:00:00+10:00",
+      "SupplierCode": "SUP1002",
+      "SupplierName": "Northgate Scientific Pty Ltd",
+      "Creator": "e.williams",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 834.73,
+      "TaxSum": 83.47,
+      "GrossSum": 918.2,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "5",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1.88,
+          "NetSum": 9.4,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 0.94,
+          "GrossSum": 10.34,
+          "DesiredDeliveryDate": "2026-11-27",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": "PRJ-24017"
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Docking station",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "3.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 275.11,
+          "NetSum": 825.33,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 82.53,
+          "GrossSum": 907.86,
+          "DesiredDeliveryDate": "2026-12-12",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 40,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1300",
+              "CostCenterName": "Faculty of Arts",
+              "ProjectCode": "PRJ-25118"
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 30,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1400",
+              "CostCenterName": "Faculty of Medicine, Health & Human Sciences",
+              "ProjectCode": "PRJ-25118"
+            },
+            {
+              "RowIndex": "3",
+              "SplitPercent": 30,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040089",
+      "OrderType": "Blanket",
+      "OrderStatus": "Cancelled",
+      "CreationTime": "2026-02-14T10:42:45+10:00",
+      "LastUpdated": "2026-11-15T09:30:00+10:00",
+      "SupplierCode": "SUP1006",
+      "SupplierName": "Lane Cove Consulting",
+      "Creator": "f.kelly",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 0.0,
+      "TaxSum": 0.0,
+      "GrossSum": 0.0,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Cancelled",
+          "Description": "Centrifuge tubes (pack)",
+          "CategoryCode": "LAB",
+          "CategoryName": "Laboratory Supplies",
+          "Quantity": "2.00",
+          "QuantityUnit": "PK",
+          "NetUnitPrice": 67.49,
+          "NetSum": 134.98,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 13.5,
+          "GrossSum": 148.48,
+          "DesiredDeliveryDate": "2026-03-02",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC1300",
+              "CostCenterName": "Faculty of Arts",
+              "ProjectCode": "PRJ-26042"
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Cancelled",
+          "Description": "Monitor 27in",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "10.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 499.86,
+          "NetSum": 4998.6,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 499.86,
+          "GrossSum": 5498.46,
+          "DesiredDeliveryDate": "2026-02-20",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040069",
+      "OrderType": "Blanket",
+      "OrderStatus": "Received",
+      "CreationTime": "2026-07-28T13:24:08+10:00",
+      "LastUpdated": "2026-11-15T09:59:46+10:00",
+      "SupplierCode": "SUP1003",
+      "SupplierName": "Bluegum IT Solutions",
+      "Creator": "e.williams",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 1443.93,
+      "TaxSum": 144.4,
+      "GrossSum": 1588.33,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Event catering",
+          "CategoryCode": "CATR",
+          "CategoryName": "Catering",
+          "Quantity": "1",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1179.08,
+          "NetSum": 1179.08,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 117.91,
+          "GrossSum": 1296.99,
+          "DesiredDeliveryDate": "2026-08-29",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55100",
+              "AccountName": "Catering & Hospitality",
+              "CostCenterCode": "CC1200",
+              "CostCenterName": "Business School",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700137",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-08-05",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 1179.08,
+              "Recipient": "e.williams"
+            }
+          ]
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Centrifuge tubes (pack)",
+          "CategoryCode": "LAB",
+          "CategoryName": "Laboratory Supplies",
+          "Quantity": "5",
+          "QuantityUnit": "PK",
+          "NetUnitPrice": 52.97,
+          "NetSum": 264.85,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 26.49,
+          "GrossSum": 291.34,
+          "DesiredDeliveryDate": "2026-08-15",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC1300",
+              "CostCenterName": "Faculty of Arts",
+              "ProjectCode": "PRJ-26042"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700138",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-08-19",
+              "ReceivedQuantity": 2,
+              "ReceivedNetSum": 105.94,
+              "Recipient": "d.chen"
+            },
+            {
+              "GoodsReceiptNumber": "GR700190",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 3,
+              "ReceivedNetSum": 158.91,
+              "Recipient": "c.patel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040047",
+      "OrderType": "Standard",
+      "OrderStatus": "Cancelled",
+      "CreationTime": "2026-02-21T10:49:52Z",
+      "LastUpdated": "2026-11-15T00:30:00Z",
+      "SupplierCode": "SUP1008",
+      "SupplierName": "Epping Print & Design",
+      "Creator": "f.kelly",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 0.0,
+      "TaxSum": 0.0,
+      "GrossSum": 0.0,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Cancelled",
+          "Description": "Event catering",
+          "CategoryCode": "CATR",
+          "CategoryName": "Catering",
+          "Quantity": "5",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2722.44,
+          "NetSum": 13612.2,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 1361.22,
+          "GrossSum": 14973.42,
+          "DesiredDeliveryDate": "2026-03-01",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55100",
+              "AccountName": "Catering & Hospitality",
+              "CostCenterCode": "CC1200",
+              "CostCenterName": "Business School",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Cancelled",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "2.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1155.23,
+          "NetSum": 2310.46,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 231.05,
+          "GrossSum": 2541.51,
+          "DesiredDeliveryDate": "2026-03-23",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC1300",
+              "CostCenterName": "Faculty of Arts",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "30",
+          "LineStatus": "Cancelled",
+          "Description": "Ergonomic chair",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "5",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 584.96,
+          "NetSum": 2924.8,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 292.48,
+          "GrossSum": 3217.28,
+          "DesiredDeliveryDate": "2026-03-02",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-26042"
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "40",
+          "LineStatus": "Cancelled",
+          "Description": "Nitrile gloves (box)",
+          "CategoryCode": "LAB",
+          "CategoryName": "Laboratory Supplies",
+          "Quantity": "1.000",
+          "QuantityUnit": "BX",
+          "NetUnitPrice": 18.62,
+          "NetSum": 18.62,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 1.86,
+          "GrossSum": 20.48,
+          "DesiredDeliveryDate": "2026-04-01",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC2200",
+              "CostCenterName": "Property",
+              "ProjectCode": "PRJ-26042"
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040078",
+      "OrderType": "Blanket",
+      "OrderStatus": "PartiallyReceived",
+      "CreationTime": "2026-09-07T05:22:22+10:00",
+      "LastUpdated": "2026-11-15T01:30:00Z",
+      "SupplierCode": "SUP1004",
+      "SupplierName": "Ryde Catering Co",
+      "Creator": "e.williams",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 6078.5,
+      "TaxSum": 607.85,
+      "GrossSum": 6686.35,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "250.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2.54,
+          "NetSum": 635.0,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 63.5,
+          "GrossSum": 698.5,
+          "DesiredDeliveryDate": "2026-10-08",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 60,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC2200",
+              "CostCenterName": "Property",
+              "ProjectCode": null
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 40,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700159",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-09-20",
+              "ReceivedQuantity": 125,
+              "ReceivedNetSum": 317.5,
+              "Recipient": "a.nguyen"
+            },
+            {
+              "GoodsReceiptNumber": "GR700191",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 62,
+              "ReceivedNetSum": 157.48,
+              "Recipient": "c.patel"
+            },
+            {
+              "GoodsReceiptNumber": "GR700192",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 31,
+              "ReceivedNetSum": 78.74,
+              "Recipient": "f.kelly"
+            }
+          ]
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "5",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1088.7,
+          "NetSum": 5443.5,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 544.35,
+          "GrossSum": 5987.85,
+          "DesiredDeliveryDate": "2026-09-28",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-25003"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700160",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-10-01",
+              "ReceivedQuantity": 2,
+              "ReceivedNetSum": 2177.4,
+              "Recipient": "b.smith"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040101",
+      "OrderType": "Standard",
+      "OrderStatus": "Sent",
+      "CreationTime": "2026-11-15T08:30:00+10:00",
+      "LastUpdated": "2026-11-15T02:00:00Z",
+      "SupplierCode": "SUP1008",
+      "SupplierName": "Epping Print & Design",
+      "Creator": "e.williams",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 48519.8,
+      "TaxSum": 4851.98,
+      "GrossSum": 53371.78,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Annual software licence",
+          "CategoryCode": "IT-SW",
+          "CategoryName": "Software & Licences",
+          "Quantity": "10.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 4851.98,
+          "NetSum": 48519.8,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 4851.98,
+          "GrossSum": 53371.78,
+          "DesiredDeliveryDate": "2026-12-29",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51300",
+              "AccountName": "Software Licences",
+              "CostCenterCode": "CC1200",
+              "CostCenterName": "Business School",
+              "ProjectCode": "PRJ-24017"
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040000",
+      "OrderType": "Standard",
+      "OrderStatus": "Closed",
+      "CreationTime": "2025-12-28T02:54:48+10:00",
+      "LastUpdated": "2026-01-23T13:16:47Z",
+      "SupplierCode": "SUP1002",
+      "SupplierName": "Northgate Scientific Pty Ltd",
+      "Creator": "f.kelly",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 550.22,
+      "TaxSum": 55.02,
+      "GrossSum": 605.24,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Cancelled",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "10",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1318.46,
+          "NetSum": 13184.6,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 1318.46,
+          "GrossSum": 14503.06,
+          "DesiredDeliveryDate": "2026-01-09",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": "PRJ-24017"
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Docking station",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "2.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 275.11,
+          "NetSum": 550.22,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 55.02,
+          "GrossSum": 605.24,
+          "DesiredDeliveryDate": "2026-01-26",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 40,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-25118"
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 30,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC2200",
+              "CostCenterName": "Property",
+              "ProjectCode": "PRJ-25118"
+            },
+            {
+              "RowIndex": "3",
+              "SplitPercent": 30,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700001",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-01-21",
+              "ReceivedQuantity": 2,
+              "ReceivedNetSum": 550.22,
+              "Recipient": "b.smith"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040028",
+      "OrderType": "Standard",
+      "OrderStatus": "Closed",
+      "CreationTime": "2026-04-10T23:22:25+10:00",
+      "LastUpdated": "2026-11-15T02:30:00Z",
+      "SupplierCode": "SUP1007",
+      "SupplierName": "Southern Cross Lab Equipment",
+      "Creator": "c.patel",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 2940.16,
+      "TaxSum": 294.02,
+      "GrossSum": 3234.18,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Nitrile gloves (box)",
+          "CategoryCode": "LAB",
+          "CategoryName": "Laboratory Supplies",
+          "Quantity": "10.00",
+          "QuantityUnit": "BX",
+          "NetUnitPrice": 17.44,
+          "NetSum": 174.4,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 17.44,
+          "GrossSum": 191.84,
+          "DesiredDeliveryDate": "2026-04-15",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 50,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC1400",
+              "CostCenterName": "Faculty of Medicine, Health & Human Sciences",
+              "ProjectCode": null
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 50,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC2200",
+              "CostCenterName": "Property",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700056",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-28",
+              "ReceivedQuantity": 5,
+              "ReceivedNetSum": 87.2,
+              "Recipient": "d.chen"
+            },
+            {
+              "GoodsReceiptNumber": "GR700057",
+              "ReversedGoodsReceiptNumber": "GR700056",
+              "ReceivingDate": "2026-04-29",
+              "ReceivedQuantity": -5,
+              "ReceivedNetSum": -87.2,
+              "Recipient": "d.chen"
+            },
+            {
+              "GoodsReceiptNumber": "GR700058",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-30",
+              "ReceivedQuantity": 5,
+              "ReceivedNetSum": 87.2,
+              "Recipient": "d.chen"
+            },
+            {
+              "GoodsReceiptNumber": "GR700059",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-28",
+              "ReceivedQuantity": 5,
+              "ReceivedNetSum": 87.2,
+              "Recipient": "c.patel"
+            }
+          ]
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Consulting services",
+          "CategoryCode": "CONS",
+          "CategoryName": "Consulting Services",
+          "Quantity": "8.000",
+          "QuantityUnit": "HR",
+          "NetUnitPrice": 250.05,
+          "NetSum": 2000.4,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 200.04,
+          "GrossSum": 2200.44,
+          "DesiredDeliveryDate": "2026-05-01",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "54100",
+              "AccountName": "Consultancy Fees",
+              "CostCenterCode": "CC1200",
+              "CostCenterName": "Business School",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700060",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-18",
+              "ReceivedQuantity": 8,
+              "ReceivedNetSum": 2000.4,
+              "Recipient": "e.williams"
+            }
+          ]
+        },
+        {
+          "LineNumber": "30",
+          "LineStatus": "Open",
+          "Description": "Docking station",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "3",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 255.12,
+          "NetSum": 765.36,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 76.54,
+          "GrossSum": 841.9,
+          "DesiredDeliveryDate": "2026-04-21",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 60,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1200",
+              "CostCenterName": "Business School",
+              "ProjectCode": "PRJ-25118"
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 40,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700061",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-17",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 255.12,
+              "Recipient": "f.kelly"
+            },
+            {
+              "GoodsReceiptNumber": "GR700062",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-17",
+              "ReceivedQuantity": 2,
+              "ReceivedNetSum": 510.24,
+              "Recipient": "e.williams"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040065",
+      "OrderType": "Standard",
+      "OrderStatus": "Received",
+      "CreationTime": "2026-07-24T02:53:09Z",
+      "LastUpdated": "2026-11-15T04:00:00Z",
+      "SupplierCode": "SUP1003",
+      "SupplierName": "Bluegum IT Solutions",
+      "Creator": "d.chen",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 316.43,
+      "TaxSum": 31.64,
+      "GrossSum": 348.07,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Docking station",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "1.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 316.43,
+          "NetSum": 316.43,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 31.64,
+          "GrossSum": 348.07,
+          "DesiredDeliveryDate": "2026-08-26",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700194",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 1.0,
+              "ReceivedNetSum": 316.43,
+              "Recipient": "a.nguyen"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040082",
+      "OrderType": "Standard",
+      "OrderStatus": "Closed",
+      "CreationTime": "2026-06-08T15:12:17Z",
+      "LastUpdated": "2026-11-15T14:30:00+10:00",
+      "SupplierCode": "SUP1001",
+      "SupplierName": "Harbourside Office Supplies Pty Ltd",
+      "Creator": "e.williams",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 5986.5,
+      "TaxSum": 598.65,
+      "GrossSum": 6585.15,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Annual software licence",
+          "CategoryCode": "IT-SW",
+          "CategoryName": "Software & Licences",
+          "Quantity": "1",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 5986.5,
+          "NetSum": 5986.5,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 598.65,
+          "GrossSum": 6585.15,
+          "DesiredDeliveryDate": "2026-07-19",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51300",
+              "AccountName": "Software Licences",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700164",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-07-01",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 5986.5,
+              "Recipient": "f.kelly"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040103",
+      "OrderType": "Standard",
+      "OrderStatus": "Approved",
+      "CreationTime": "2026-11-15T05:00:00Z",
+      "LastUpdated": "2026-11-15T05:00:00Z",
+      "SupplierCode": "SUP1008",
+      "SupplierName": "Epping Print & Design",
+      "Creator": "c.patel",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 22659.92,
+      "TaxSum": 2265.99,
+      "GrossSum": 24925.91,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "5.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1194.88,
+          "NetSum": 5974.4,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 597.44,
+          "GrossSum": 6571.84,
+          "DesiredDeliveryDate": "2026-12-23",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Ergonomic chair",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "10",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 740.99,
+          "NetSum": 7409.9,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 740.99,
+          "GrossSum": 8150.89,
+          "DesiredDeliveryDate": "2026-12-02",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC1200",
+              "CostCenterName": "Business School",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "30",
+          "LineStatus": "Open",
+          "Description": "Event catering",
+          "CategoryCode": "CATR",
+          "CategoryName": "Catering",
+          "Quantity": "3.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 3091.1,
+          "NetSum": 9273.3,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 927.33,
+          "GrossSum": 10200.63,
+          "DesiredDeliveryDate": "2026-11-21",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55100",
+              "AccountName": "Catering & Hospitality",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "40",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "1.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2.32,
+          "NetSum": 2.32,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 0.23,
+          "GrossSum": 2.55,
+          "DesiredDeliveryDate": "2026-12-17",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040102",
+      "OrderType": "Standard",
+      "OrderStatus": "Sent",
+      "CreationTime": "2026-11-15T03:00:00Z",
+      "LastUpdated": "2026-11-15T15:30:00+10:00",
+      "SupplierCode": "SUP1002",
+      "SupplierName": "Northgate Scientific Pty Ltd",
+      "Creator": "a.nguyen",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 49.6,
+      "TaxSum": 4.96,
+      "GrossSum": 54.56,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "10",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2.52,
+          "NetSum": 25.2,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 2.52,
+          "GrossSum": 27.72,
+          "DesiredDeliveryDate": "2026-12-10",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-26042"
+            }
+          ],
+          "GoodsReceipts": []
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "10",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2.44,
+          "NetSum": 24.4,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 2.44,
+          "GrossSum": 26.84,
+          "DesiredDeliveryDate": "2026-12-20",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040050",
+      "OrderType": "Standard",
+      "OrderStatus": "PartiallyReceived",
+      "CreationTime": "2025-12-10T18:15:37Z",
+      "LastUpdated": "2026-11-15T06:00:00Z",
+      "SupplierCode": "SUP1001",
+      "SupplierName": "Harbourside Office Supplies Pty Ltd",
+      "Creator": "f.kelly",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 7351.47,
+      "TaxSum": 69.92,
+      "GrossSum": 7421.39,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Docking station",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "2.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 295.67,
+          "NetSum": 591.34,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 59.13,
+          "GrossSum": 650.47,
+          "DesiredDeliveryDate": "2026-01-01",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": "PRJ-24017"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700100",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2025-12-30",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 295.67,
+              "Recipient": "a.nguyen"
+            }
+          ]
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Annual software licence",
+          "CategoryCode": "IT-SW",
+          "CategoryName": "Software & Licences",
+          "Quantity": "1",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 6652.19,
+          "NetSum": 6652.19,
+          "TaxCode": "GSTFREE",
+          "TaxPercent": 0,
+          "TaxTotal": 0.0,
+          "GrossSum": 6652.19,
+          "DesiredDeliveryDate": "2026-01-13",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 70,
+              "AccountCode": "51300",
+              "AccountName": "Software Licences",
+              "CostCenterCode": "CC1300",
+              "CostCenterName": "Faculty of Arts",
+              "ProjectCode": "PRJ-24017"
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 30,
+              "AccountCode": "51300",
+              "AccountName": "Software Licences",
+              "CostCenterCode": "CC1400",
+              "CostCenterName": "Faculty of Medicine, Health & Human Sciences",
+              "ProjectCode": "PRJ-24017"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700101",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-01-01",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 6652.19,
+              "Recipient": "b.smith"
+            }
+          ]
+        },
+        {
+          "LineNumber": "30",
+          "LineStatus": "Open",
+          "Description": "Centrifuge tubes (pack)",
+          "CategoryCode": "LAB",
+          "CategoryName": "Laboratory Supplies",
+          "Quantity": "2",
+          "QuantityUnit": "PK",
+          "NetUnitPrice": 53.97,
+          "NetSum": 107.94,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 10.79,
+          "GrossSum": 118.73,
+          "DesiredDeliveryDate": "2025-12-27",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "52100",
+              "AccountName": "Laboratory Consumables",
+              "CostCenterCode": "CC1300",
+              "CostCenterName": "Faculty of Arts",
+              "ProjectCode": "PRJ-25003"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700102",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2025-12-26",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 53.97,
+              "Recipient": "c.patel"
+            },
+            {
+              "GoodsReceiptNumber": "GR700195",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 53.97,
+              "Recipient": "e.williams"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040090",
+      "OrderType": "Standard",
+      "OrderStatus": "Sent",
+      "CreationTime": "2026-01-17T06:24:50+10:00",
+      "LastUpdated": "2026-11-15T06:30:00Z",
+      "SupplierCode": "SUP1003",
+      "SupplierName": "Bluegum IT Solutions",
+      "Creator": "f.kelly",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 951.59,
+      "TaxSum": 95.16,
+      "GrossSum": 1046.75,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "1",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 951.59,
+          "NetSum": 951.59,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 95.16,
+          "GrossSum": 1046.75,
+          "DesiredDeliveryDate": "2026-02-11",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700193",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 951.59,
+              "Recipient": "e.williams"
+            },
+            {
+              "GoodsReceiptNumber": "GR700196",
+              "ReversedGoodsReceiptNumber": "GR700193",
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": -1,
+              "ReceivedNetSum": -951.59,
+              "Recipient": "e.williams"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040078",
+      "OrderType": "Blanket",
+      "OrderStatus": "PartiallyReceived",
+      "CreationTime": "2026-09-07T05:22:22+10:00",
+      "LastUpdated": "2026-11-15T11:00:00+10:00",
+      "SupplierCode": "SUP1004",
+      "SupplierName": "Ryde Catering Co",
+      "Creator": "e.williams",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 6078.5,
+      "TaxSum": 607.85,
+      "GrossSum": 6686.35,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "250.000",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2.54,
+          "NetSum": 635.0,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 63.5,
+          "GrossSum": 698.5,
+          "DesiredDeliveryDate": "2026-10-08",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 60,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC2200",
+              "CostCenterName": "Property",
+              "ProjectCode": null
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 40,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700159",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-09-20",
+              "ReceivedQuantity": 125,
+              "ReceivedNetSum": 317.5,
+              "Recipient": "a.nguyen"
+            },
+            {
+              "GoodsReceiptNumber": "GR700191",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-11-15",
+              "ReceivedQuantity": 62,
+              "ReceivedNetSum": 157.48,
+              "Recipient": "c.patel"
+            }
+          ]
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Sit-stand desk",
+          "CategoryCode": "FURN",
+          "CategoryName": "Furniture",
+          "Quantity": "5",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1088.7,
+          "NetSum": 5443.5,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 544.35,
+          "GrossSum": 5987.85,
+          "DesiredDeliveryDate": "2026-09-28",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "53100",
+              "AccountName": "Furniture & Fittings",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-25003"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700160",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-10-01",
+              "ReceivedQuantity": 2,
+              "ReceivedNetSum": 2177.4,
+              "Recipient": "b.smith"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040094",
+      "OrderType": "Standard",
+      "OrderStatus": "Cancelled",
+      "CreationTime": "2026-08-18T01:15:15Z",
+      "LastUpdated": "2026-11-15T17:00:00+10:00",
+      "SupplierCode": "SUP1001",
+      "SupplierName": "Harbourside Office Supplies Pty Ltd",
+      "Creator": "b.smith",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 0.0,
+      "TaxSum": 0.0,
+      "GrossSum": 0.0,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Cancelled",
+          "Description": "Laptop 14in",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "1.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 1822.45,
+          "NetSum": 1822.45,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 182.25,
+          "GrossSum": 2004.7,
+          "DesiredDeliveryDate": "2026-09-28",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 50,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC2200",
+              "CostCenterName": "Property",
+              "ProjectCode": null
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 50,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1400",
+              "CostCenterName": "Faculty of Medicine, Health & Human Sciences",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": []
+        }
+      ]
+    },
+    {
+      "OrderNumber": "PO1040083",
+      "OrderType": "Standard",
+      "OrderStatus": "Closed",
+      "CreationTime": "2026-04-03T11:35:09Z",
+      "LastUpdated": "2026-11-15T17:29:57+10:00",
+      "SupplierCode": "SUP1007",
+      "SupplierName": "Southern Cross Lab Equipment",
+      "Creator": "d.chen",
+      "PurchaseCurrency": "AUD",
+      "NetSum": 5453.6,
+      "TaxSum": 545.36,
+      "GrossSum": 5998.96,
+      "OrderLines": [
+        {
+          "LineNumber": "10",
+          "LineStatus": "Open",
+          "Description": "Docking station",
+          "CategoryCode": "IT-HW",
+          "CategoryName": "IT Hardware",
+          "Quantity": "1",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 230.39,
+          "NetSum": 230.39,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 23.04,
+          "GrossSum": 253.43,
+          "DesiredDeliveryDate": "2026-04-25",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "51200",
+              "AccountName": "Computer Equipment < $5k",
+              "CostCenterCode": "CC1100",
+              "CostCenterName": "Faculty of Science and Engineering",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700165",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-20",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 230.39,
+              "Recipient": "f.kelly"
+            }
+          ]
+        },
+        {
+          "LineNumber": "20",
+          "LineStatus": "Open",
+          "Description": "Printed brochures",
+          "CategoryCode": "PRNT",
+          "CategoryName": "Printing",
+          "Quantity": "1000.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2.51,
+          "NetSum": 2510.0,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 251.0,
+          "GrossSum": 2761.0,
+          "DesiredDeliveryDate": "2026-05-12",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 100,
+              "AccountCode": "55200",
+              "AccountName": "Printing & Stationery",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": null
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700166",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-11",
+              "ReceivedQuantity": 1000,
+              "ReceivedNetSum": 2510.0,
+              "Recipient": "d.chen"
+            }
+          ]
+        },
+        {
+          "LineNumber": "30",
+          "LineStatus": "Open",
+          "Description": "Event catering",
+          "CategoryCode": "CATR",
+          "CategoryName": "Catering",
+          "Quantity": "1.00",
+          "QuantityUnit": "EA",
+          "NetUnitPrice": 2713.21,
+          "NetSum": 2713.21,
+          "TaxCode": "GST10",
+          "TaxPercent": 10,
+          "TaxTotal": 271.32,
+          "GrossSum": 2984.53,
+          "DesiredDeliveryDate": "2026-05-08",
+          "CodingRows": [
+            {
+              "RowIndex": "1",
+              "SplitPercent": 40,
+              "AccountCode": "55100",
+              "AccountName": "Catering & Hospitality",
+              "CostCenterCode": "CC2100",
+              "CostCenterName": "Information Technology",
+              "ProjectCode": "PRJ-25118"
+            },
+            {
+              "RowIndex": "2",
+              "SplitPercent": 30,
+              "AccountCode": "55100",
+              "AccountName": "Catering & Hospitality",
+              "CostCenterCode": "CC2300",
+              "CostCenterName": "Library",
+              "ProjectCode": "PRJ-25118"
+            },
+            {
+              "RowIndex": "3",
+              "SplitPercent": 30,
+              "AccountCode": "55100",
+              "AccountName": "Catering & Hospitality",
+              "CostCenterCode": "CC1400",
+              "CostCenterName": "Faculty of Medicine, Health & Human Sciences",
+              "ProjectCode": "PRJ-25118"
+            }
+          ],
+          "GoodsReceipts": [
+            {
+              "GoodsReceiptNumber": "GR700167",
+              "ReversedGoodsReceiptNumber": null,
+              "ReceivingDate": "2026-04-20",
+              "ReceivedQuantity": 1,
+              "ReceivedNetSum": 2713.21,
+              "Recipient": "a.nguyen"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

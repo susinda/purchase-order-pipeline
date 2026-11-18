@@ -8,7 +8,7 @@ A cloud-hosted, scheduled pipeline for moving purchase-order snapshots from a Fa
 
 The exercise is to build a reproducible integration pipeline for nested purchase-order JSON. It must deliver orders to both an operational target API and an analytics warehouse, preserve updates from an initial and an incremental extract, and provide a dimensional model for reporting. Kafka and Airflow are required parts of the design. The work should be demonstrable from a personal GitHub repository, with documented decisions and visible CI runs.
 
-The source pack is in the companion `requirment_docs` folder in the workspace. It contains `CANDIDATE_INSTRUCTIONS.pdf`, `ER_DIAGRAM.pdf`, and the two fictional-data fixtures. The spelling `requirment_docs` is the current folder name. The fixtures should be copied into this repository under `data/` when implementation begins so builds and tests do not depend on files outside the repository.
+The candidate source pack is included in [`requirements_docs/`](requirements_docs/): the brief, ER diagram and fictional-data fixtures are kept together so the project does not depend on files outside this repository.
 
 ### Requirements
 
@@ -232,9 +232,12 @@ Only add directories when they contain working code or useful documentation.
 ```text
 purchase-order-pipeline/
 ├── README.md
-├── data/
-│   ├── purchased_order_initial.json
-│   └── purchased_order_incremental.json
+├── requirements_docs/
+│   ├── CANDIDATE_INSTRUCTIONS.pdf
+│   ├── ER_DIAGRAM.pdf
+│   └── sample_data/
+│       ├── purchased_order_initial.json
+│       └── purchased_order_incremental.json
 ├── api/
 │   ├── source/
 │   └── target/

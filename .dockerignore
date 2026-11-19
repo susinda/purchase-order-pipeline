@@ -1,0 +1,10 @@
+**
+!api/
+!api/source/
+!api/source/Dockerfile
+!api/source/main.py
+!api/source/requirements.txt
+!requirements_docs/
+!requirements_docs/sample_data/
+!requirements_docs/sample_data/purchased_order_initial.json
+!requirements_docs/sample_data/purchased_order_incremental.json

@@ -151,6 +151,8 @@ activemq-data/
 
 # Environments
 .env
+ca.pem
+aiven_ca.pem
 .envrc
 .venv
 env/

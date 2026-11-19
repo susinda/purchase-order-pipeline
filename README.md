@@ -2,7 +2,74 @@
 
 A cloud-hosted, scheduled pipeline for moving purchase-order snapshots from a FastAPI source through Kafka to two independent destinations: a FastAPI target system and Snowflake. Airflow orchestrates each finite batch, and dbt builds reporting models over the required relational tables.
 
-> **Project status:** Design and implementation checklist. This repository currently contains this README and `.gitignore`; the application, infrastructure and tests described below are planned work, not implemented functionality.
+> **Project status:** The fixture-backed Source API, standalone Kafka producer and Kafka inspection consumer are implemented. Airflow orchestration, the Target API, Snowflake and dbt are planned.
+
+## Run the Source API
+
+From the repository root, build and start the service:
+
+```bash
+docker compose up --build -d
+curl http://127.0.0.1:8000/health
+curl 'http://127.0.0.1:8000/purchase-orders?load_type=initial'
+curl 'http://127.0.0.1:8000/purchase-orders?load_type=incremental'
+```
+
+The API returns the full JSON envelopes from `requirements_docs/sample_data/`, with 100 initial records and 20 incremental records. The `load_type` parameter is required and accepts `initial` or `incremental`. Interactive API docs are at [localhost:8000/docs](http://127.0.0.1:8000/docs). Use `docker compose down` to stop the service.
+
+To run with Python 3.12 from the repository root:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r api/source/requirements.txt
+python -m uvicorn api.source.main:app
+```
+
+## Publish an extract to Kafka
+
+Start the Source API, then run the producer from the repository root:
+
+```bash
+python -m pip install -r integration/requirements.txt
+cp .env.example .env
+```
+
+Edit `.env` with the broker address, topic, username, password and path to the Aiven CA certificate. The example uses the supplied topic name `purchaseorders`. Set `KAFKA_TOPIC` to your actual topic and `SOURCE_API_URL` to the base URL of the Source API. Both `.env` and `ca.pem` are gitignored. Quote values that contain shell special characters before sourcing the file. [Aiven Python connection guide](https://aiven.io/docs/products/kafka/howto/connect-with-python)
+
+```bash
+set -a
+source ./.env
+set +a
+python -m integration.kafka_producer initial
+python -m integration.kafka_producer incremental
+```
+
+Each command fetches one extract and publishes one message per record, with `OrderNumber` as its key and the full order JSON as its value. Kafka headers carry `batch_id`, `event_id`, `load_type` and `extracted_at`. The command prints the count after Kafka acknowledges every record. A failed run may have published part of the batch. Rerunning the same extract produces the same event IDs so consumers can deduplicate.
+
+### Publish one JSON message
+
+With the Kafka connection variables exported, run this from the repository root:
+
+```bash
+python -m integration.k_producer purchaseorders-test '{"message":"Hello Kafka"}'
+```
+
+Use an existing topic you can write to. Keep the JSON inside single quotes so the shell passes it as one argument. The CLI takes the topic from the command line and the broker address and port, TLS settings, and SASL credentials from the same environment variables as the batch producer. It prints the partition and offset after Kafka acknowledges the message.
+
+## Inspect Kafka messages
+
+With the same Kafka environment variables loaded, run the inspection consumer:
+
+```bash
+python -m integration.kafka_consumer --max-messages 20 --idle-timeout 10
+```
+
+It prints each message's UTF-8 key and value with its partition and offset, then commits the offset for the inspection group. Omit both flags to keep listening until Ctrl+C.
+
+The default inspection group is `purchaseorders-consumer`. It resumes at its committed offsets on restart. Set `KAFKA_CONSUMER_GROUP_ID` to a fresh group to read retained messages from the beginning with the default `KAFKA_AUTO_OFFSET_RESET=earliest`. Use a dedicated inspection group to keep delivery workers' offsets independent. Set `KAFKA_CONSUMER_CLIENT_ID` to override the default client ID.
+
+Run the producer and consumer tests with `python -m unittest discover -s tests -v`. They use mocked HTTP and Kafka calls.
 
 ## Problem
 
@@ -190,8 +257,8 @@ Check items as they are completed. The checklist is a plan; unchecked items are 
 
 ### 2. Build and deploy the APIs
 
-- [ ] Copy the supplied fictional fixtures into the repository's `data/` directory.
-- [ ] Implement the deterministic Source API with explicit `initial` and `incremental` modes and response-count validation.
+- [x] Serve the existing fictional fixtures from `requirements_docs/sample_data/`.
+- [x] Implement the deterministic Source API with explicit `initial` and `incremental` modes and response-count validation.
 - [ ] Implement the Target API with persistent state, processed-event idempotency and stale-version protection.
 - [ ] Add API health checks, input validation, authentication and useful structured logs.
 - [ ] Build and deploy both APIs to the Coolify instance; confirm Airflow can reach their HTTPS endpoints.
@@ -270,7 +337,7 @@ purchase-order-pipeline/
 
 ## Build, commit and deploy
 
-Implementation commands will be finalized when the corresponding code and dependency manifests exist. Do not treat the examples below as runnable in the current repository state.
+The Source API commands are in [Run the Source API](#run-the-source-api). The examples below describe the planned workflow for the rest of the pipeline.
 
 ### Local development
 
@@ -285,7 +352,7 @@ python -m pip install -r requirements-dev.txt
 pytest
 ```
 
-Add `.env.example` with variable names and placeholder values only. Keep real credentials in local ignored `.env` files or cloud secret stores. Never commit Snowflake keys/passwords, Kafka certificates, API tokens, provider state files or real customer data.
+Use `.env.example` for variable names and placeholder values. Keep real credentials in local ignored `.env` files or cloud secret stores. Never commit Snowflake keys/passwords, Kafka certificates, API tokens, provider state files or real customer data.
 
 ### Git and commits
 
@@ -310,7 +377,7 @@ The staging paths above are examples and become valid after those files exist. U
 5. Configure the Snowflake-managed dbt project to pull from the repository and run after the warehouse DAG reports a complete batch. Check dbt tests and run history.
 6. Smoke-test both deployed API health endpoints, Kafka publish/consume, Snowflake row counts and dbt completion. A successful image build or infrastructure plan alone is not end-to-end evidence.
 
-Exact Docker, Coolify, Airflow, Kafka and dbt commands will be added after provider choices and implementation files are in place.
+Coolify, Airflow, Kafka and dbt deployment commands will be added after provider choices and implementation files are in place.
 
 ## Future work
 

@@ -14,15 +14,15 @@ were triggered or already existed. Check each child run for its delivery result.
    secret `ASTRO_API_TOKEN`. Enable DAG-only deploys on that Astro deployment.
 2. Run [Initialize environment](../.github/workflows/initialize-environment.yml)
    with `test` selected to create the Target API tables and provision Kafka.
-   Enable **deploy_runtime**
-   if Astro still needs the Kafka and Snowflake dependencies. The workflow then
-   stages the DAGs into the [Airflow build folder](../airflow/) and deploys the
-   runtime image using `airflow/requirements.txt`. Use the matching base tag if
-   your Astro deployment already runs a version newer than Runtime 3.1.
+   Enable **deploy_runtime** if Astro still needs the Kafka and Snowflake
+   dependencies. The workflow builds and deploys the image from the
+   [Astro project](../airflow/) using `airflow/requirements.txt`. Use the matching
+   base tag if your Astro deployment already runs a version newer than Runtime 3.1.
 3. Deploy the updated Target API image before running the DAGs. Its runtime
    account needs `SELECT`, `INSERT`, and `UPDATE` on both purchase-order tables.
    [Deploy APIs and DAGs](../.github/workflows/deploy-apis-and-dags.yml) deploys
-   the DAG bundle to Astro on pushes to `main` that modify `dags/`.
+   the DAG bundle to Astro on pushes to `main` that modify `dags/` or when
+   you run it manually with `dags` selected.
 4. Set the runtime values below in Astro. Enable all three DAGs before
    triggering the publisher. Use the same topic and group IDs when provisioning
    Kafka ACLs. The producer needs topic Write. Both consumers need topic Read

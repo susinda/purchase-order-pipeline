@@ -2,6 +2,3 @@
 !Dockerfile
 !requirements.txt
 !packages.txt
-!dags/
-!dags/**
-dags/**/__pycache__/

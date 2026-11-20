@@ -60,7 +60,7 @@ jobs:
           python -m integration.provision_kafka
           echo '[Aiven] Kafka provisioning is complete.'
 
-      - name: Prepare the Astro runtime build
+      - name: Check Astro runtime deployment inputs
         if: inputs.deploy_runtime
         env:
           ASTRO_DEPLOYMENT_ID: ${{ vars.ASTRO_DEPLOYMENT_ID }}
@@ -68,8 +68,11 @@ jobs:
         run: |
           : "${ASTRO_DEPLOYMENT_ID:?Set the ASTRO_DEPLOYMENT_ID variable in the selected GitHub environment}"
           : "${ASTRO_API_TOKEN:?Set the ASTRO_API_TOKEN secret in the selected GitHub environment}"
-          echo '[Astro] Staging DAGs and runtime dependencies for the image build.'
-          cp -R dags airflow/
+          if [[ ! -f airflow/.astro/config.yaml ]]; then
+            echo '::error::Missing airflow/.astro/config.yaml required by the Astro CLI.'
+            exit 1
+          fi
+          echo '[Astro] Ready to deploy the runtime image with Kafka and Snowflake dependencies.'
 
       - name: Install Astro CLI
         if: inputs.deploy_runtime
@@ -77,7 +80,7 @@ jobs:
         with:
           version: '1.45.0'
 
-      - name: Deploy the Astro runtime image and DAGs
+      - name: Deploy the Astro runtime image
         if: inputs.deploy_runtime
         uses: astronomer/deploy-action@v0.17.0
         env:
@@ -85,16 +88,14 @@ jobs:
         with:
           checkout: 'false'
           deployment-id: ${{ vars.ASTRO_DEPLOYMENT_ID }}
-          deploy-type: image-and-dags
+          deploy-type: image-only
           root-folder: airflow
-          dags-path: dags
-          no-dags-base-dir: 'true'
           skip-unchanged: 'false'
           wake-on-deploy: 'true'
 
       - name: Report Astro runtime deployment
         if: inputs.deploy_runtime
-        run: echo '[Astro] Runtime image and DAG deployment completed.'
+        run: echo '[Astro] Runtime image deployment completed.'
 
       - name: Report skipped Astro runtime deployment
         if: ${{ !inputs.deploy_runtime }}

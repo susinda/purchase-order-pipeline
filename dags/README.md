@@ -12,17 +12,17 @@ were triggered or already existed. Check each child run for its delivery result.
 
 1. In GitHub's `test` environment, set the variable `ASTRO_DEPLOYMENT_ID` and
    secret `ASTRO_API_TOKEN`. Enable DAG-only deploys on that Astro deployment.
-2. Deploy the updated Target API image before running the DAGs. On existing
-   MySQL databases with a restricted runtime account, run
-   `python -m api.target.init_db` with a setup account. The Target API runtime
+2. Run [Initialize environment](../.github/workflows/initialize-environment.yml)
+   with `test` selected to create the Target API tables and provision Kafka.
+   Enable **deploy_runtime**
+   if Astro still needs the Kafka and Snowflake dependencies. The workflow then
+   stages the DAGs into the [Airflow build folder](../airflow/) and deploys the
+   runtime image using `airflow/requirements.txt`. Use the matching base tag if
+   your Astro deployment already runs a version newer than Runtime 3.1.
+3. Deploy the updated Target API image before running the DAGs. Its runtime
    account needs `SELECT`, `INSERT`, and `UPDATE` on both purchase-order tables.
-3. If the Astro runtime does not already have Kafka and Snowflake dependencies,
-   manually run **Astronomer CI - Deploy DAGs** with **deploy_runtime** enabled.
-   The workflow stages `dags/` into the [Airflow build folder](../airflow/)
-   and builds Astro Runtime 3.1 using `airflow/requirements.txt`. If your Astro
-   deployment already runs a newer Airflow 3 version, use the matching base tag.
-   Subsequent pushes to `main` that
-   modify `dags/` deploy the DAG bundle only.
+   [Deploy APIs and DAGs](../.github/workflows/deploy-apis-and-dags.yml) deploys
+   the DAG bundle to Astro on pushes to `main` that modify `dags/`.
 4. Set the runtime values below in Astro. Enable all three DAGs before
    triggering the publisher. Use the same topic and group IDs when provisioning
    Kafka ACLs. The producer needs topic Write. Both consumers need topic Read
@@ -35,8 +35,7 @@ were triggered or already existed. Check each child run for its delivery result.
 | `TARGET_API_USERNAME`, `TARGET_API_PASSWORD` | Target Basic Auth credentials |
 | `KAFKA_BOOTSTRAP_SERVERS` | Aiven broker address |
 | `KAFKA_PRODUCER_SASL_PASSWORD` | Password of the configured producer user |
-| `KAFKA_BACKEND_SASL_PASSWORD` | Password of the configured backend user |
-| `KAFKA_ANALYTICS_SASL_PASSWORD` | Password of the configured analytics user |
+| `KAFKA_CONSUMER_SASL_PASSWORD` | Password of the `airflow-consumer` user shared by both downstream DAGs |
 | `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Default to `SASL_SSL` and `SCRAM-SHA-256` |
 | `KAFKA_CA_PEM` or `KAFKA_SSL_CAFILE` | Aiven CA certificate contents or a CA file path when the broker requires a custom CA |
 | `KAFKA_BATCH_TIMEOUT_SECONDS` | Defaults to 300 seconds per delivery attempt |
@@ -57,9 +56,11 @@ The default topic, usernames, and group IDs come from the bundled
 provisioning secrets, and the Snowflake account credentials stay in the Airflow
 connection. Existing
 `KAFKA_TOPIC`, `KAFKA_BACKEND_GROUP_ID`, and `KAFKA_ANALYTICS_GROUP_ID` settings
-override those names. A role-specific SASL username can also be overridden in
-Astro. If no dedicated credentials are set for a role, the DAG accepts the
-shared `KAFKA_SASL_USERNAME` and `KAFKA_SASL_PASSWORD` settings for compatibility.
+override those names. Both downstream DAGs use the same SASL user and keep
+separate group IDs. Set `KAFKA_CONSUMER_SASL_USERNAME` only to override the
+configured consumer username. Existing per-DAG credential pairs are supported
+when the shared consumer credentials are unset. The general
+`KAFKA_SASL_USERNAME` and `KAFKA_SASL_PASSWORD` settings also remain available.
 
 ## Delivery and recovery
 

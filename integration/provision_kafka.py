@@ -19,7 +19,7 @@ def read_resources(properties):
     dlts = {role: required_setting(properties, f"kafka.{role}.dlt") for role in DESTINATIONS}
     users = {
         role: required_setting(properties, f"kafka.{role}.username")
-        for role in ("producer", *DESTINATIONS)
+        for role in ("producer", "consumer")
     }
     groups = {role: required_setting(properties, f"kafka.{role}.group") for role in DESTINATIONS}
     topics = (topic, *dlts.values())
@@ -41,12 +41,12 @@ def read_resources(properties):
     }
     if any((topic_config[key] or 0) < 1 for key in ("partitions", "replication", "retention_hours")):
         raise ValueError("Set positive integers for topic partitions, replication, and retention hours")
-    grants = [(users["producer"], "Topic", topic, "Write")]
+    consumer = users["consumer"]
+    grants = [(users["producer"], "Topic", topic, "Write"), (consumer, "Topic", topic, "Read")]
     for role in DESTINATIONS:
         grants.extend([
-            (users[role], "Topic", topic, "Read"),
-            (users[role], "Topic", dlts[role], "Write"),
-            (users[role], "Group", groups[role], "Read"),
+            (consumer, "Topic", dlts[role], "Write"),
+            (consumer, "Group", groups[role], "Read"),
         ])
     return topics, topic_config, users, groups, grants
 

@@ -110,8 +110,8 @@ class BatchTest(unittest.TestCase):
         properties = {
             "kafka.topic": "configured-topic",
             "kafka.backend.group": "configured-group",
-            "kafka.backend.username": "configured-user",
-            "kafka.backend.password": "${BACKEND_TEST_PASSWORD}",
+            "kafka.consumer.username": "configured-user",
+            "kafka.consumer.password": "${CONSUMER_TEST_PASSWORD}",
             "kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
             "kafka.security.protocol": "SASL_SSL",
             "kafka.sasl.mechanism": "SCRAM-SHA-256",
@@ -119,15 +119,17 @@ class BatchTest(unittest.TestCase):
         }
         settings = {
             "KAFKA_BOOTSTRAP_SERVERS": "broker.example",
-            "KAFKA_BACKEND_SASL_USERNAME": "",
-            "BACKEND_TEST_PASSWORD": "test-${password}",
+            "KAFKA_CONSUMER_SASL_PASSWORD": "test-${password}",
+            "CONSUMER_TEST_PASSWORD": "test-${password}",
+            "KAFKA_BACKEND_SASL_USERNAME": "legacy-user",
         }
         with patch("dags.po_pipeline.settings.application_properties", return_value=properties):
             self.assertEqual(kafka_topic(settings), "configured-topic")
             self.assertEqual(kafka_group_id(settings, "backend"), "configured-group")
-            options = connection_options(settings, role="backend")
-            self.assertEqual(options["sasl_plain_username"], "configured-user")
-            self.assertEqual(options["sasl_plain_password"], "test-${password}")
+            for role in ("backend", "analytics"):
+                options = connection_options(settings, role=role)
+                self.assertEqual(options["sasl_plain_username"], "configured-user")
+                self.assertEqual(options["sasl_plain_password"], "test-${password}")
             self.assertEqual(kafka_topic(settings | {"KAFKA_TOPIC": "explicit-topic"}), "explicit-topic")
 
 

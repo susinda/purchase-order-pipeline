@@ -1,0 +1,285 @@
+name: Deploy APIs and DAGs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      component:
+        description: What to deploy
+        type: choice
+        default: both
+        options: [both, apis, dags]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-release-${{ github.ref }}
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  check_changes:
+    name: Select deployment jobs
+    runs-on: ubuntu-latest
+    outputs:
+      apis: ${{ steps.changes.outputs.apis }}
+      dags: ${{ steps.changes.outputs.dags }}
+    steps:
+      - uses: actions/checkout@v6
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Select components
+        id: changes
+        shell: bash
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          COMPONENT: ${{ inputs.component }}
+        run: |
+          apis=false
+          dags=false
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              apis=true
+              ;;
+            workflow_dispatch)
+              if [[ "$COMPONENT" == both || "$COMPONENT" == apis ]]; then
+                apis=true
+              fi
+              if [[ "$COMPONENT" == both || "$COMPONENT" == dags ]]; then
+                dags=true
+              fi
+              ;;
+            push)
+              if [[ "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
+                BEFORE_SHA=$(git hash-object -w -t tree --stdin < /dev/null)
+              fi
+              api_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- api/)
+              dag_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- dags/)
+              if [[ -n "$api_changes" ]]; then
+                apis=true
+              fi
+              if [[ -n "$dag_changes" ]]; then
+                dags=true
+              fi
+              ;;
+          esac
+          printf 'apis=%s\ndags=%s\n' "$apis" "$dags" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Test and build both APIs
+    needs: check_changes
+    if: needs.check_changes.outputs.apis == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      BUILDKIT_PROGRESS: plain
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Run unit tests
+        run: |
+          python -m pip install -r api/source/requirements.txt -r api/target/requirements.txt \
+            -r integration/requirements.txt 'httpx>=0.28,<1'
+          python -m unittest discover -s tests -v
+
+      - name: Build both API images
+        shell: bash
+        run: |
+          for api in source target; do
+            docker build --build-arg APP_IMAGE_TAG="$GITHUB_SHA" \
+              --tag "ghcr.io/susinda/purchase-order-$api:$GITHUB_SHA" "api/$api"
+          done
+
+      - name: Publish both tested images to GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for api in source target; do
+            image="ghcr.io/susinda/purchase-order-$api"
+            docker image tag "$image:$GITHUB_SHA" "$image:latest"
+            docker image push "$image:$GITHUB_SHA"
+            docker image push "$image:latest"
+          done
+
+  deploy_apis:
+    name: Deploy both APIs to Coolify test
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: test
+    env:
+      COOLIFY_API_URL: ${{ vars.COOLIFY_API_URL }}
+      COOLIFY_SERVICE_UUID: ${{ vars.COOLIFY_SERVICE_UUID }}
+      SOURCE_API_URL: ${{ vars.SOURCE_API_URL }}
+      TARGET_API_URL: ${{ vars.TARGET_API_URL }}
+    steps:
+      - name: Check test API URLs are configured
+        run: |
+          : "${SOURCE_API_URL:?Set SOURCE_API_URL in the test environment}"
+          : "${TARGET_API_URL:?Set TARGET_API_URL in the test environment}"
+
+      - name: Update IMAGE_TAG in Coolify
+        env:
+          COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
+        run: |
+          # The bulk endpoint also creates IMAGE_TAG on the first deploy.
+          curl -fsS --proto '=https' --max-time 15 -X PATCH \
+            "${COOLIFY_API_URL%/}/services/$COOLIFY_SERVICE_UUID/envs/bulk" \
+            -H "Authorization: Bearer $COOLIFY_AUTH_TOKEN" \
+            -H 'Accept: application/json' -H 'Content-Type: application/json' \
+            -d "{\"data\":[{\"key\":\"IMAGE_TAG\",\"value\":\"$GITHUB_SHA\"}]}" -o /dev/null
+
+      - name: Trigger Coolify deployment
+        shell: bash
+        env:
+          COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
+        run: |
+          curl -fsS --proto '=https' --max-time 15 -X POST \
+            "${COOLIFY_API_URL%/}/deploy?uuid=$COOLIFY_SERVICE_UUID&force=false" \
+            -H "Authorization: Bearer $COOLIFY_AUTH_TOKEN" -H 'Accept: application/json' |
+            jq -er --arg uuid "$COOLIFY_SERVICE_UUID" '
+              .deployments[] | select(.resource_uuid == $uuid) | .message |
+              if startswith("Service ") then . else error("Coolify did not accept deployment: " + .) end'
+
+  deploy_dags:
+    name: Deploy DAGs to Astro
+    needs: check_changes
+    if: needs.check_changes.outputs.dags == 'true'
+    concurrency:
+      group: astro-dag-deploy-test
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: test
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check Astro deployment inputs
+        env:
+          ASTRO_DEPLOYMENT_ID: ${{ vars.ASTRO_DEPLOYMENT_ID }}
+          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
+        run: |
+          : "${ASTRO_DEPLOYMENT_ID:?Set the ASTRO_DEPLOYMENT_ID variable in the test environment}"
+          : "${ASTRO_API_TOKEN:?Set the ASTRO_API_TOKEN secret in the test environment}"
+          if [[ ! -d dags ]]; then
+            echo '::error::Add the dags/ directory before deploying to Astro.'
+            exit 1
+          fi
+
+      - name: Install Astro CLI
+        uses: astronomer/setup-astro-cli@v0.0.1
+        with:
+          version: '1.45.0'
+
+      - name: Deploy DAGs to Astro
+        uses: astronomer/deploy-action@v0.17.0
+        env:
+          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
+        with:
+          checkout: 'false'
+          deployment-id: ${{ vars.ASTRO_DEPLOYMENT_ID }}
+          deploy-type: dags-only
+          dags-path: dags
+          no-dags-base-dir: 'true'
+          skip-unchanged: 'false'
+          wake-on-deploy: 'true'
+
+  verify_services:
+    name: Verify deployed services
+    needs: [deploy_apis, deploy_dags]
+    if: >-
+      !cancelled() && !failure() &&
+      (needs.deploy_apis.result == 'success' || needs.deploy_dags.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: test
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check API health, Kafka topic, and Airflow health
+        shell: bash
+        env:
+          SOURCE_API_URL: ${{ vars.SOURCE_API_URL }}
+          TARGET_API_URL: ${{ vars.TARGET_API_URL }}
+          EXPECTED_IMAGE_TAG: ${{ needs.deploy_apis.result == 'success' && github.sha || '' }}
+          KAFKA_BOOTSTRAP_SERVERS: ${{ vars.KAFKA_BOOTSTRAP_SERVERS }}
+          KAFKA_TOPIC: ${{ vars.KAFKA_TOPIC }}
+          KAFKA_SECURITY_PROTOCOL: ${{ vars.KAFKA_SECURITY_PROTOCOL }}
+          KAFKA_SASL_MECHANISM: ${{ vars.KAFKA_SASL_MECHANISM }}
+          KAFKA_SASL_USERNAME: ${{ vars.KAFKA_SASL_USERNAME || secrets.KAFKA_SASL_USERNAME }}
+          KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD || secrets.KAFKA_PRODUCER_SASL_PASSWORD }}
+          KAFKA_CA_PEM: ${{ secrets.KAFKA_CA_PEM }}
+          AIRFLOW_BASE_URL: ${{ vars.AIRFLOW_BASE_URL }}
+          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
+        run: |
+          failed=0
+          check() {
+            local service="$1"
+            shift
+            echo "Checking $service"
+            if ! "$@"; then
+              echo "::error::$service check failed"
+              failed=1
+            fi
+          }
+
+          check_api() {
+            local url="$1" setting="$2"
+            if [[ -z "$url" ]]; then
+              echo "Set $setting in the test environment."
+              return 1
+            fi
+            python3 scripts/check_api.py health "$url" --image-tag "$EXPECTED_IMAGE_TAG"
+          }
+
+          check_kafka() {
+            if [[ -z "$KAFKA_BOOTSTRAP_SERVERS" ]]; then
+              echo 'Set KAFKA_BOOTSTRAP_SERVERS in the test environment.'
+              return 1
+            fi
+            local venv="$RUNNER_TEMP/kafka-check"
+            python3 -m venv "$venv" &&
+              "$venv/bin/python" -m pip install -r integration/requirements.txt &&
+              timeout 45s "$venv/bin/python" -m integration.kafka_check
+          }
+
+          check_airflow() {
+            if [[ -z "$AIRFLOW_BASE_URL" || -z "$ASTRO_API_TOKEN" ]]; then
+              echo 'Set AIRFLOW_BASE_URL and ASTRO_API_TOKEN in the test environment.'
+              return 1
+            fi
+            curl -fsS --proto '=https' --max-time 10 --retry 2 --retry-max-time 25 \
+              -H "Authorization: Bearer $ASTRO_API_TOKEN" \
+              -H 'Accept: application/json' \
+              "${AIRFLOW_BASE_URL%/}/api/v2/monitor/health" |
+              jq -se 'length == 1 and (.[0] | .metadatabase.status == "healthy" and .scheduler.status == "healthy")'
+          }
+
+          check 'Source API' check_api "$SOURCE_API_URL" SOURCE_API_URL
+          check 'Target API' check_api "$TARGET_API_URL" TARGET_API_URL
+          check 'Kafka topic' check_kafka
+          check 'Airflow' check_airflow
+          exit "$failed"

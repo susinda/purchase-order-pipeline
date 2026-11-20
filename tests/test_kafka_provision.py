@@ -23,8 +23,7 @@ class KafkaProvisionTest(unittest.TestCase):
             "kafka.backend.dlt=orders.backend.dlt\n"
             "kafka.analytics.dlt=orders.analytics.dlt\n"
             "kafka.producer.username=orders-producer\n"
-            "kafka.backend.username=orders-backend\n"
-            "kafka.analytics.username=orders-analytics\n"
+            "kafka.consumer.username=orders-consumer\n"
             "kafka.backend.group=orders-target\n"
             "kafka.analytics.group=orders-reporting\n"
             "kafka.topic.partitions=1\n"
@@ -81,21 +80,20 @@ class KafkaProvisionTest(unittest.TestCase):
             provision_kafka.main()
             provision_kafka.main()
         self.assertEqual(self.created_topics, ["orders", "orders.backend.dlt", "orders.analytics.dlt"])
-        self.assertEqual(self.created_users, ["orders-backend", "orders-analytics"])
+        self.assertEqual(self.created_users, ["orders-consumer"])
         self.assertEqual(self.topics["orders"]["partitions"], 1)
         self.assertEqual(self.users["orders-producer"]["password"], "existing-password")
         self.assertNotIn("password", self.output.getvalue())
-        self.assertEqual(len(self.acls), 7)
+        self.assertEqual(len(self.acls), 6)
         self.assertEqual({
             (acl["principal"], acl["resource_type"], acl["resource_name"], acl["operation"]) for acl in self.acls
         }, {
             ("User:orders-producer", "Topic", "orders", "Write"),
-            ("User:orders-backend", "Topic", "orders", "Read"),
-            ("User:orders-backend", "Topic", "orders.backend.dlt", "Write"),
-            ("User:orders-backend", "Group", "orders-target", "Read"),
-            ("User:orders-analytics", "Topic", "orders", "Read"),
-            ("User:orders-analytics", "Topic", "orders.analytics.dlt", "Write"),
-            ("User:orders-analytics", "Group", "orders-reporting", "Read"),
+            ("User:orders-consumer", "Topic", "orders", "Read"),
+            ("User:orders-consumer", "Topic", "orders.backend.dlt", "Write"),
+            ("User:orders-consumer", "Group", "orders-target", "Read"),
+            ("User:orders-consumer", "Topic", "orders.analytics.dlt", "Write"),
+            ("User:orders-consumer", "Group", "orders-reporting", "Read"),
         })
         for acl in self.acls:
             self.assertEqual(acl["permission_type"], "ALLOW")

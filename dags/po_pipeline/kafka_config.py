@@ -21,15 +21,19 @@ def connection_options(env, *, role=None):
     if protocol.startswith("SASL_"):
         username_key = "KAFKA_SASL_USERNAME"
         password_property = "kafka.sasl.password"
+        identity = "consumer" if role in {"backend", "analytics"} else role
         if role is not None:
-            prefix = f"KAFKA_{role.upper()}_SASL"
-            role_username, role_password = f"{prefix}_USERNAME", f"{prefix}_PASSWORD"
-            if role_username in env or role_password in env:
-                username_key = role_username
-                password_property = f"kafka.{role}.password"
+            credential_roles = (identity, role) if identity != role else (role,)
+            for credential_role in credential_roles:
+                prefix = f"KAFKA_{credential_role.upper()}_SASL"
+                role_username, role_password = f"{prefix}_USERNAME", f"{prefix}_PASSWORD"
+                if role_username in env or role_password in env:
+                    username_key = role_username
+                    password_property = f"kafka.{credential_role}.password"
+                    break
         username = env.get(username_key, "").strip()
-        if not username and role is not None:
-            username = application_setting(f"kafka.{role}.username", env)
+        if not username and identity is not None:
+            username = application_setting(f"kafka.{identity}.username", env)
         options.update(
             sasl_mechanism=application_setting("kafka.sasl.mechanism", env, override="KAFKA_SASL_MECHANISM"),
             sasl_plain_username=username or required_setting(env, username_key),

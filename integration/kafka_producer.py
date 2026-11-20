@@ -1,55 +1,30 @@
 import argparse
-import base64
 import hashlib
-import json
 import os
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 
-from .kafka_config import connection_options, required_setting
+from dags.po_pipeline.events import (
+    ACK_TIMEOUT_SECONDS, LOAD_TYPES, fetch_extract as fetch_source_extract, json_bytes, validate_extract,
+)
+from dags.po_pipeline.settings import api_credentials, application_setting
 
-
-LOAD_TYPES = ("initial", "incremental")
-SOURCE_TIMEOUT_SECONDS = 30
-ACK_TIMEOUT_SECONDS = 30
+from .kafka_config import connection_options, kafka_topic
 
 
 def kafka_config(env):
     return {
-        **connection_options(env),
+        **connection_options(env, role="producer"),
         "acks": "all",
         "max_block_ms": ACK_TIMEOUT_SECONDS * 1000,
     }
 
 
 def fetch_extract(source_url, load_type, source_auth):
-    query = urlencode({"load_type": load_type})
-    request = Request(f"{source_url.rstrip('/')}/purchase-orders?{query}")
-    username, password = source_auth
-    credentials = base64.b64encode(f"{username}:{password}".encode("ascii")).decode("ascii")
-    request.add_unredirected_header("Authorization", f"Basic {credentials}")
-    with urlopen(request, timeout=SOURCE_TIMEOUT_SECONDS) as response:
-        return json.load(response)
-
-
-def json_bytes(payload):
-    return json.dumps(
-        payload, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
+    return fetch_source_extract(source_url, load_type, source_auth, opener=urlopen)
 
 
 def prepare_messages(extract, load_type):
-    if not isinstance(extract, dict) or extract.get("load_type") != load_type:
-        raise ValueError(f"Source must return a {load_type} extract")
-
-    orders = extract.get("purchased_orders")
-    count = extract.get("record_count")
-    if not isinstance(orders, list) or type(count) is not int or count != len(orders):
-        raise ValueError("record_count must match the purchased_orders array")
-
-    extracted_at = extract.get("extracted_at")
-    if not isinstance(extracted_at, str) or not extracted_at.strip():
-        raise ValueError("Source extract must include extracted_at")
+    orders, extracted_at = validate_extract(extract, load_type)
 
     batch_id = hashlib.sha256(json_bytes(extract)).hexdigest()
     messages = []
@@ -93,12 +68,11 @@ def main():
     args = parser.parse_args()
 
     try:
-        producer_options = kafka_config(os.environ)
-        topic = required_setting(os.environ, "KAFKA_TOPIC")
-        source_auth = (
-            required_setting(os.environ, "SOURCE_API_USERNAME"),
-            required_setting(os.environ, "SOURCE_API_PASSWORD"),
-        )
+        env = {"SOURCE_API_URL": "http://127.0.0.1:8000", **os.environ}
+        producer_options = kafka_config(env)
+        topic = kafka_topic(env)
+        source_url = application_setting("source.api.url", env)
+        source_auth = api_credentials("source", env)
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -106,7 +80,7 @@ def main():
 
     batch_id, count = publish_load(
         args.load_type,
-        source_url=os.environ.get("SOURCE_API_URL", "http://127.0.0.1:8000"),
+        source_url=source_url,
         source_auth=source_auth,
         topic=topic,
         producer_factory=KafkaProducer,

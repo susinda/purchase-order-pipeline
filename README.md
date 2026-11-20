@@ -2,7 +2,7 @@
 
 A cloud-hosted, scheduled pipeline for moving purchase-order snapshots from a FastAPI source through Kafka to two independent destinations: a FastAPI target system and Snowflake. Airflow orchestrates each finite batch, and dbt builds reporting models over the required relational tables.
 
-> **Project status:** The fixture-backed Source API, MySQL-backed Target API, standalone Kafka producer and Kafka inspection consumer are implemented. Airflow orchestration, Kafka delivery to the Target API, Snowflake and dbt are planned.
+> **Project status:** The Source and Target APIs, Kafka tools, and three Astro DAGs are implemented. The analytics DAG expects an existing Snowflake-managed dbt project. See [Astro setup and recovery](dags/README.md) for runtime configuration.
 
 ## Run the Source API
 
@@ -54,11 +54,11 @@ curl -i --user 'your-target-username' \
 | `422 Unprocessable Content` | Invalid order or missing or invalid `OrderNumber` |
 | `500 Internal Server Error` / `503 Service Unavailable` | Database operation failed or the database is unavailable |
 
-MySQL stores one complete snapshot per order number, including all nested rows. Duplicate detection compares the whole current JSON document. Object field order is ignored, and arrays are compared in order. A changed snapshot replaces the previous one. Version ordering and replay of older events remain part of the Kafka delivery work.
+MySQL stores one complete snapshot per order number, including all nested rows. Duplicate detection compares the whole current JSON document. Object field order is ignored, and arrays are compared in order. Airflow sends an `Idempotency-Key` with each event and a timezone-aware `LastUpdated` in the order. The API records the event ID with the write and returns `stale` when a newer snapshot is already stored. Reusing the key with a different payload returns HTTP 409.
 
 ### Initialize an external MySQL database
 
-Create the database before starting the Target API. At startup, the API checks for `purchase_orders` and applies [schema.sql](api/target/schema.sql) if the table is missing. The runtime account needs `SELECT`, `INSERT`, and `UPDATE` on `purchase_orders`, plus `CREATE` for automatic setup of a missing table.
+Create the database before starting the Target API. At startup, the API checks `purchase_orders` and `purchase_order_events`. The runtime account needs `SELECT`, `INSERT`, and `UPDATE` on both tables, plus `CREATE` to initialize either table automatically.
 
 If the runtime account lacks `CREATE`, run the following once from a machine that can reach MySQL. Use a setup account with `CREATE` permission on the database.
 
@@ -76,7 +76,7 @@ python -m pip install -r api/target/requirements.txt
 )
 ```
 
-Both startup and the initializer preserve existing rows. The local MySQL Compose service also applies the same schema file when it first initializes its volume. If the schema evolves, run versioned migrations before deployment from an environment with database access.
+Both startup and the initializer preserve existing rows. The local MySQL Compose service also applies both schema files when it first initializes its volume. If the schema evolves, run versioned migrations before deployment from an environment with database access.
 
 ## API authentication and Swagger
 
@@ -86,22 +86,22 @@ Both APIs use Basic Auth for purchase-order requests and Swagger UI. Open [Sourc
 
 ## Prepare Aiven Kafka
 
-Complete these steps once for each Kafka environment.
+Use the [GitHub Actions workflow](#provision-kafka-with-github-actions) to set up the topic and permissions, or configure them manually with the steps below.
 
-1. **Create the topic.** Open your Kafka service and select **Topics → Create topic**. Create a classic topic named `purchaseorders`, the name in `.env.example`, or set `KAFKA_TOPIC` to the exact name of your existing topic. Use one partition for the demo and a replication factor supported by your service plan. Create `purchaseorders-test` as well if you want a dedicated topic for the single-message test below. [Aiven topic setup](https://aiven.io/docs/products/kafka/howto/create-topic)
+1. **Create the topic.** Open your Kafka service and select **Topics → Create topic**. Use the `kafka.topic` name in [application.properties](dags/po_pipeline/application.properties), or set `KAFKA_TOPIC` to override it for a client. Use one partition for the demo and a replication factor supported by your service plan. Create `purchaseorders-test` as well if you want a dedicated topic for the single-message test below. [Aiven topic setup](https://aiven.io/docs/products/kafka/howto/create-topic)
 2. **Create a service user.** Open **Access & Control → Users** and create a dedicated Kafka user such as `purchaseorders-demo`. Use its generated password and save it in your local `.env` or runtime secret store. When deploying independent workers, give the producer and each consumer their own service user so their permissions can be managed independently. [Aiven service users](https://aiven.io/docs/products/kafka/howto/add-manage-service-users)
-3. **Choose consumer group IDs.** Use `purchaseorders-consumer` for the inspection CLI. Reserve `target-api-group` and `snowflake-group` for the delivery workers. Kafka forms a group when the first authorized consumer joins with that ID. You can grant access to the ID before starting the consumer. Set `KAFKA_CONSUMER_GROUP_ID` to the group you granted. [Apache Kafka consumer groups](https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html)
+3. **Choose consumer group IDs.** Use `purchaseorders-consumer` for the inspection CLI and `purchase-orders-backend` and `purchase-orders-analytics` for the delivery DAGs. Kafka manages group state when consumers connect and commit offsets. You can grant access to the ID before starting the consumer. Set `KAFKA_CONSUMER_GROUP_ID` to the group you granted for the CLI. [Apache Kafka consumer groups](https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html)
 4. **Grant access.** In **Access & Control → ACL → Kafka-native ACLs**, add the applicable rules below. Set permission type to `ALLOW`, principal to `User:<service-username>`, pattern type to `LITERAL`, and host to `*` if access should work from any client IP. Use the exact topic and group names. For `GroupAuthorizationFailedError`, check the saved group rule and any matching `DENY` entries. [Aiven ACL setup](https://aiven.io/docs/products/kafka/howto/manage-acls#add-a-kafka-native-acl-entry)
 
    | Client | Operation | Resource type | Resource |
    |---|---|---|---|
-   | Producer | Write | Topic | `purchaseorders` |
-   | Consumer | Read | Topic | `purchaseorders` |
+   | Producer | Write | Topic | `purchase-orders` |
+   | Consumer | Read | Topic | `purchase-orders` |
    | Consumer | Read | Group | Its exact group ID, such as `purchaseorders-consumer` |
 
    If you use one service user for the demo, apply all three rules to that user. If you create the optional test topic, grant the producer `Write` and the inspection consumer `Read` on `purchaseorders-test` too.
 
-5. **Get the connection settings and CA certificate.** In the Kafka service, open **Overview → Quick connect → Python**. Select your topic, **SASL**, and your service user. Under **Downloads**, download the CA certificate and save it as `ca.pem` in the repository root. Copy the SASL host and port into `KAFKA_BOOTSTRAP_SERVERS`. Set `KAFKA_SECURITY_PROTOCOL=SASL_SSL`, `KAFKA_SASL_MECHANISM=SCRAM-SHA-256`, `KAFKA_SASL_USERNAME` and `KAFKA_SASL_PASSWORD` for that user, and `KAFKA_SSL_CAFILE=./ca.pem`. [Aiven Python connection guide](https://aiven.io/docs/products/kafka/howto/connect-with-python)
+5. **Get the connection settings and CA certificate.** In the Kafka service, open **Overview → Quick connect → Python**. Select your topic, **SASL**, and your service user. Under **Downloads**, save the CA certificate as `integration/aiven_ca.pem`. Copy the SASL host and port into `KAFKA_BOOTSTRAP_SERVERS` and the password into `KAFKA_PRODUCER_SASL_PASSWORD` or `KAFKA_INSPECTION_SASL_PASSWORD` for the matching user in `application.properties`. The properties file supplies the SASL defaults, and `.env.example` supplies the CA file path. [Aiven Python connection guide](https://aiven.io/docs/products/kafka/howto/connect-with-python)
 
 Use these commands from the repository root to set up the virtual environment and install the Kafka client.
 
@@ -112,7 +112,9 @@ python -m pip install -r integration/requirements.txt
 test -f .env || (umask 077 && cp .env.example .env)
 ```
 
-Fill in `.env` with the settings above. Quote values containing shell special characters. Git ignores `.env` and `ca.pem`.
+Fill in `.env` with the settings above. Quote values containing shell special characters. Git ignores `.env` and `integration/aiven_ca.pem`.
+
+[application.properties](dags/po_pipeline/application.properties) lists provisioning settings first and solution runtime settings second. A value written as `${ENV_VAR}` is resolved from the process environment when the command uses that setting. Export your local `.env` before running commands. GitHub Actions and Astro supply the same environment variables through their configured secrets and settings.
 
 ```bash
 set -a
@@ -120,17 +122,22 @@ source ./.env
 set +a
 ```
 
-### Automate the one-time setup later
+### Provision Kafka with GitHub Actions
 
-A manually triggered GitHub Actions workflow can call the Aiven API or run the Aiven CLI against an existing service. Use `workflow_dispatch` and scope the Aiven management API token to the provisioning job through a GitHub environment secret. Keep runtime SASL credentials in the application secret store. [Aiven API reference](https://api.aiven.io/doc/) · [Manual GitHub Actions workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) · [GitHub Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
+1. Set the topic, dead-letter topic, service-user, and group names in [application.properties](dags/po_pipeline/application.properties). Provisioning and the Kafka clients share this file, which is deployed with the DAGs. To keep using an existing main topic, set `kafka.topic` to its exact name. Set partition count, replication, and retention to values supported by the service plan. These settings apply only when creating a topic.
+2. In GitHub under **Settings → Environments → test**, add the variables `AIVEN_PROJECT` and `AIVEN_SERVICE_NAME` and the secret `AIVEN_API_TOKEN`. The API token needs permission to create topics and service users and manage Kafka-native ACLs on the existing Kafka service. [Aiven API reference](https://api.aiven.io/doc/)
+3. After pushing the workflow and properties to GitHub, open **Actions → Provision Aiven Kafka → Run workflow**. [Manual workflow runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+4. Retrieve each service user's credentials from Aiven and configure the role-specific variables in [Astro](dags/README.md#set-up-the-deployment). The workflow keeps generated passwords out of GitHub logs and artifacts. [Aiven service users](https://aiven.io/docs/products/kafka/howto/add-manage-service-users)
 
-| Setup task | Automation |
-|---|---|
-| Create a topic | Check for the desired topic and create it with `avn service topic-create` if missing. [Aiven topic CLI](https://aiven.io/docs/tools/cli/service/topic) |
-| Create a service user | Create a missing user with `avn service user-create`. Keep existing users and deliver generated credentials to the runtime secret store without logging them. [Aiven user CLI](https://aiven.io/docs/tools/cli/service/user) |
-| Grant access | Compare the existing rules with the desired topic and group rules. Add missing rules with `avn service kafka-acl-add`. [Aiven ACL CLI](https://aiven.io/docs/tools/cli/service/kafka-acl) |
-| Set up consumer groups | Provision ACLs for the chosen group IDs and start the consumers with those IDs. Kafka forms the groups on first join. [Apache Kafka consumer groups](https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html) |
-| Retrieve the CA | Use `avn service ca get SERVICE_NAME --target-filepath ca.pem` for the selected service. [Aiven CA CLI](https://aiven.io/docs/tools/cli/service-cli#avn-service-ca-get) |
+| Provisioned user | Topic access | Consumer group access |
+|---|---|---|
+| `airflow-producer` | Write `purchase-orders` | |
+| `airflow-backend` | Read `purchase-orders`, write `purchase-orders.backend.dlt` | Read `purchase-orders-backend` |
+| `airflow-analytics` | Read `purchase-orders`, write `purchase-orders.analytics.dlt` | Read `purchase-orders-analytics` |
+
+The workflow skips existing topics, users, and exact grants. Existing ACLs stay in place, including any `DENY` rules that take precedence. The group ACLs are created ahead of consumption. The DAGs still use the [fail-and-replay policy](dags/README.md#delivery-and-recovery) for failed batches. [Aiven Kafka-native ACLs](https://aiven.io/docs/products/kafka/howto/manage-acls)
+
+You can also run `python -m integration.provision_kafka` from the repository root with the same three Aiven settings supplied as environment variables.
 
 ## Publish an extract to Kafka
 
@@ -171,7 +178,7 @@ The default inspection group is `purchaseorders-consumer`. It resumes at its com
 
 The exercise is to build a reproducible integration pipeline for nested purchase-order JSON. It must deliver orders to both an operational target API and an analytics warehouse, preserve updates from an initial and an incremental extract, and provide a dimensional model for reporting. Kafka and Airflow are required parts of the design. The work should be demonstrable from a personal GitHub repository, with documented decisions and visible CI runs.
 
-The candidate source pack is included in [`requirements_docs/`](requirements_docs/): the brief, ER diagram and fictional-data fixtures are kept together so the project does not depend on files outside this repository.
+The brief and ER diagram are in [`requirements_docs/`](requirements_docs/). The fictional source fixtures are bundled in [`api/source/sample_data/`](api/source/sample_data/).
 
 ### Requirements
 
@@ -222,7 +229,9 @@ The brief does not specify production traffic, an update frequency, a latency SL
 
 Airflow runs finite batch jobs in the cloud. The producer fetches one extract from the Source API, validates its envelope, creates stable event metadata, and publishes one full order snapshot per Kafka message. Two independent consumer flows deliver those events: one upserts the Target API, while the other writes raw events and reconciles the four relational tables in Snowflake. Once the warehouse batch is complete, Airflow invokes dbt to create tested staging and dimensional models.
 
-### Architecture
+### Architecture and planned retry topics
+
+The flow diagrams include proposed retry topics and dead-letter topics. The current DAGs use bounded Airflow retries and preserve failed and unrelated Kafka records for replay. See [the current failure policy](dags/README.md#delivery-and-recovery).
 
 ```mermaid
 flowchart LR
@@ -264,7 +273,7 @@ flowchart LR
 	DEV -. no full local stack .-> CLOUD
 ```
 
-Development uses Aiven for Kafka. The Airflow provider remains open and must provide secure connectivity to Kafka, Snowflake and the Coolify-hosted APIs. Keep services private where possible. For public endpoints, use HTTPS, authentication, TLS for Kafka, restricted network rules and scoped credentials.
+Development uses Aiven for Kafka and Astro for hosted Airflow. Astro tasks need secure connectivity to Kafka, Snowflake and the Coolify-hosted APIs. Keep services private where possible. For public endpoints, use HTTPS, authentication, TLS for Kafka, restricted network rules and scoped credentials.
 
 ### Batch and retry flow
 
@@ -294,7 +303,7 @@ flowchart TD
 
 ### Event and update handling
 
-- Kafka topic: `purchase-orders`; message key: `OrderNumber`; value: the complete nested order snapshot.
+- The Astro provisioning workflow defaults to `purchase-orders`. The message key is `OrderNumber`, and the Airflow event envelope contains the complete nested order snapshot.
 - Event metadata: stable `event_id`, `batch_id`, `load_type`, extraction time, order number and optional Airflow run/trace identifiers.
 - `event_id` must be stable on retry but distinguish separate versions of the same order. A deterministic identity can include extract identity, record position and a canonical payload hash.
 - Normalize `LastUpdated` to a timezone-aware instant before comparing versions. A stale event must not overwrite a newer order. Define a deterministic tie-break for equal timestamps.
@@ -310,7 +319,7 @@ For Target, treat a successful HTTP response as an acknowledgement only after th
 
 ### Snowflake and dbt ownership
 
-To match the brief literally, the ingestion/warehouse step owns the required four relational tables. It can flatten and reconcile the latest order snapshots in Snowflake SQL or through the ingestion code. dbt then reads those four tables to build cleaned staging models and dimensional marts.
+The analytics DAG uses Snowflake SQL to flatten and reconcile the four relational tables after verifying the full batch in RAW. The existing Snowflake-managed dbt project reads those tables and builds staging and dimensional models. Airflow checks the dbt execution result before marking the analytics DAG successful.
 
 Suggested layers:
 
@@ -327,14 +336,14 @@ Keep measures at their natural grain. Joining coding rows and receipts directly 
 
 | Decision | Choice | Why | Trade-off / revisit when |
 |---|---|---|---|
-| Processing style | Daily scheduled micro-batches, with manual trigger for demo extracts. | Low volume and no real-time SLA are assumed; fits Airflow and finite fixture files. | Move to continuous consumers if a low-latency SLA or volume requires it. |
+| Processing style | Manually triggered, finite Airflow batches. | The initial and incremental fixtures can be replayed independently. | Add a schedule when the real source frequency is known. |
 | API placement | Source and target FastAPI services deployed on the user's Coolify cloud instance. | Cloud Airflow cannot reliably reach a laptop-local service; the laptop is resource-constrained. | Revisit if networking, availability or isolation requirements outgrow this host. |
-| Kafka and Airflow | Aiven for development Kafka. Cloud Airflow provider TBD. | Keeps the laptop free of the heavyweight runtime and enables cloud-to-cloud connectivity. | Select Airflow after checking cost, connectivity and free-tier limits. |
-| Fan-out and recovery | One canonical topic, separate destination consumer groups, destination-specific retry tiers and DLTs. | Independent progress and failure handling without duplicating the producer stream. | Retry delay needs a worker/scheduler; at-least-once delivery requires idempotency and DLT operations. |
+| Kafka and Airflow | Aiven for development Kafka and Astro for hosted Airflow. | Keeps the laptop free of the heavyweight runtime and enables cloud-to-cloud connectivity. | Confirm Astro tasks can reach Kafka, Snowflake and the Coolify APIs. |
+| Fan-out and recovery | One canonical topic, separate destination consumer groups, bounded Airflow retries and manifest-based replay. | Each destination processes the same batch independently and preserves unrelated Kafka offsets. | Retry topics and dead-letter routing can be added later if operators need automated recovery. |
 | Kafka payload | One complete order per event, keyed by order number. | Preserves order boundaries and supports partition affinity and replay. | Batch-level metadata must be tracked separately. |
 | Batch orchestration | Three logical Airflow DAGs: extract/publish, Target delivery, warehouse ingestion/dbt. | Keeps source and destination responsibilities distinct. | Requires explicit cross-DAG batch completion and prevents unsafe overlapping runs. |
 | Incremental semantics | Latest complete snapshot replaces current header and child state. | Matches the stated meaning of incremental records and handles child removals. | Requires timestamp normalization, deterministic ties and atomic reconciliation. |
-| Target API | Basic Auth and MySQL-backed `POST /purchase-orders` with full-snapshot duplicate detection. | A retry of the current snapshot returns success without changing the stored order. | Version-aware replay still needs a `LastUpdated` comparison and deterministic tie-break. |
+| Target API | Basic Auth and MySQL-backed `POST /purchase-orders`. Keyed requests record the event ID and compare `LastUpdated` and a snapshot hash. | Replays and stale events leave a newer order intact. | Unkeyed clients use the original snapshot-upsert contract. |
 | Warehouse model | Ingestion maintains the four relational tables; dbt builds analytics on top. | Follows the requirement that dbt's dimensional model sits on the four tables. | Transformation logic is split between ingestion SQL/code and dbt. |
 | Optional work | Kubernetes and OpenTelemetry after required acceptance tests pass. | Protects the timebox and cloud budget. | Bonus work may be omitted if it puts correctness or delivery at risk. |
 
@@ -413,6 +422,10 @@ purchase-order-pipeline/
 │   ├── kafka_producer.py
 │   ├── target_delivery.py
 │   └── snowflake_ingestion.py
+├── airflow/
+│   ├── Dockerfile
+│   ├── packages.txt
+│   └── requirements.txt
 ├── dags/
 │   ├── extract_publish.py
 │   ├── consume_target.py
@@ -509,18 +522,18 @@ With a Kafka broker configured in GitHub, the workflow checks that the topic is 
    | Optional variable | `SOURCE_API_USERNAME` | Username for the authenticated Source API smoke check when re-enabled |
    | Optional secret | `SOURCE_API_PASSWORD` | Password for the authenticated Source API smoke check when re-enabled |
    | Optional variable | `KAFKA_BOOTSTRAP_SERVERS` | Set to enable the Kafka metadata check from GitHub Actions |
-   | Optional variables | `KAFKA_TOPIC`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Default to `purchaseorders`, `SASL_SSL`, and `SCRAM-SHA-256` |
-   | Kafka secrets | `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, `KAFKA_CA_PEM` | Supply the SASL credentials for SASL connections and the CA certificate PEM when the broker needs a custom CA |
+   | Optional variables | `KAFKA_TOPIC`, `KAFKA_SASL_USERNAME`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Override the properties-file topic and producer username or the `SASL_SSL` and `SCRAM-SHA-256` defaults |
+   | Kafka secrets | `KAFKA_SASL_PASSWORD`, `KAFKA_CA_PEM` | SASL password for the selected user and CA certificate PEM when the broker needs a custom CA |
 
 GitHub Actions uses its built-in token to publish the images. Cloud database credentials stay in Coolify. [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) · [Coolify API permissions](https://coolify.io/docs/api/permissions)
 
-#### Remaining pipeline deployments
+#### Deploy Airflow DAGs to Astro
 
-1. Deploy the DAGs to the selected Airflow service and configure provider connections in its secret store.
-2. Provision Kafka and Snowflake, configure the Snowflake-managed dbt project, and run dbt after a complete warehouse batch.
-3. Verify Kafka delivery to both destinations, Snowflake row counts, and dbt completion over a full run.
+In the GitHub `test` environment, set `ASTRO_DEPLOYMENT_ID` as a variable and `ASTRO_API_TOKEN` as a secret. Use a token with access to the target Astro Deployment and enable DAG-only deploys there. [Astronomer GitHub Actions setup](https://www.astronomer.io/docs/astro/ci-cd-templates/default-deploy-action/)
 
-Airflow, Kafka, and dbt deployment commands will be added as those components are implemented.
+The [Astro workflow](.github/workflows/astro-deploy.yml) deploys the DAG bundle on pushes to `main` that change `dags/`. A manual run can build and deploy the Astro runtime image as well, including the Kafka and Snowflake dependencies. Follow [the Astro runbook](dags/README.md) for config, triggering a batch, and recovery. [Astronomer deploy action](https://github.com/astronomer/deploy-action)
+
+Configure the Airflow connections for Kafka, Snowflake and the Coolify APIs in Astro. Configure the Snowflake-managed dbt project and verify Kafka delivery to both destinations, Snowflake row counts, and dbt completion over a full run.
 
 ## Future work
 

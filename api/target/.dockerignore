@@ -1,6 +1,7 @@
 **
 !auth.py
 !database.py
+!events_schema.sql
 !init_db.py
 !main.py
 !requirements.txt

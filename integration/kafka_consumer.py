@@ -2,15 +2,17 @@ import argparse
 import os
 from itertools import islice
 
-from .kafka_config import connection_options, required_setting
+from dags.po_pipeline.settings import application_setting
+
+from .kafka_config import connection_options, kafka_group_id, kafka_topic
 
 
 def consumer_options(env):
     return {
-        **connection_options(env),
-        "client_id": env.get("KAFKA_CONSUMER_CLIENT_ID", "purchaseorders-inspector"),
-        "group_id": env.get("KAFKA_CONSUMER_GROUP_ID", "purchaseorders-consumer"),
-        "auto_offset_reset": env.get("KAFKA_AUTO_OFFSET_RESET", "earliest"),
+        **connection_options(env, role="inspection"),
+        "client_id": application_setting("kafka.inspection.client.id", env, override="KAFKA_CONSUMER_CLIENT_ID"),
+        "group_id": kafka_group_id(env, "inspection"),
+        "auto_offset_reset": application_setting("kafka.inspection.offset.reset", env, override="KAFKA_AUTO_OFFSET_RESET"),
         "enable_auto_commit": False,
     }
 
@@ -52,7 +54,7 @@ def main():
     )
     args = parser.parse_args()
     try:
-        topic = required_setting(os.environ, "KAFKA_TOPIC")
+        topic = kafka_topic(os.environ)
         options = consumer_options(os.environ)
     except ValueError as exc:
         parser.error(str(exc))

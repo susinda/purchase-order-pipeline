@@ -7,7 +7,7 @@ from .database import connection_options, initialize_schema
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Create the Target API table in an existing MySQL database.")
+    parser = argparse.ArgumentParser(description="Create the Target API tables in an existing MySQL database.")
     parser.parse_args()
 
     for name in ("MYSQL_HOST", "MYSQL_DATABASE", "MYSQL_USER"):

@@ -6,8 +6,8 @@ import pymysql
 from fastapi.testclient import TestClient
 from pymysql.constants import ER
 
-from api.target.database import SCHEMA
-from api.target.main import app
+from api.target.database import CHECK_EVENT_SCHEMA, CHECK_SCHEMA, EVENT_SCHEMA, SCHEMA
+from api.target.main import INSERT_EVENT, UPSERT_ORDER, app, version
 
 
 class TargetApiTest(unittest.TestCase):
@@ -44,15 +44,59 @@ class TargetApiTest(unittest.TestCase):
                 self.assertTrue(self.connect.call_args.kwargs["autocommit"])
 
     def test_startup_only_checks_an_existing_table(self):
-        self.assertEqual(self.startup_queries, [call("SELECT 1 FROM purchase_orders LIMIT 1")])
+        self.assertEqual(self.startup_queries, [call(CHECK_SCHEMA), call(CHECK_EVENT_SCHEMA)])
 
     def test_startup_creates_a_missing_table(self):
-        self.cursor.execute.side_effect = [pymysql.ProgrammingError(ER.NO_SUCH_TABLE, "missing"), 0]
+        missing = pymysql.ProgrammingError(ER.NO_SUCH_TABLE, "missing")
+        self.cursor.execute.side_effect = [missing, 0, missing, 0]
         with TestClient(app):
-            self.cursor.execute.assert_has_calls([
-                call("SELECT 1 FROM purchase_orders LIMIT 1"),
+            self.assertEqual(self.cursor.execute.call_args_list, [
+                call(CHECK_SCHEMA),
                 call(SCHEMA.read_text(encoding="utf-8")),
+                call(CHECK_EVENT_SCHEMA),
+                call(EVENT_SCHEMA.read_text(encoding="utf-8")),
             ])
+
+    def test_keyed_replay_of_an_existing_event_never_rewrites_the_order(self):
+        snapshot = self.snapshot | {"LastUpdated": "2026-01-01T00:00:00Z"}
+        self.cursor.execute.side_effect = [0, 1]
+        self.cursor.fetchone.return_value = (version(snapshot)[1],)
+        response = self.client.post(self.url, json=snapshot, auth=self.auth, headers={"Idempotency-Key": "a" * 64})
+        self.assertEqual(response.json(), {"order_number": "PO1040078", "status": "duplicate"})
+        self.assertEqual(self.cursor.execute.call_count, 2)
+        self.connect.return_value.__enter__.return_value.commit.assert_called_once()
+
+    def test_new_keyed_event_commits_the_receipt_and_order_together(self):
+        snapshot = self.snapshot | {"LastUpdated": "2026-01-01T00:00:00Z"}
+        event_id = "a" * 64
+        self.cursor.execute.side_effect = [1, 0, 1]
+        self.cursor.fetchone.return_value = None
+        response = self.client.post(self.url, json=snapshot, auth=self.auth, headers={"Idempotency-Key": event_id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "inserted")
+        self.assertEqual(self.cursor.execute.call_args_list[0], call(INSERT_EVENT, (event_id, version(snapshot)[1])))
+        self.assertEqual(self.cursor.execute.call_args.args[0], UPSERT_ORDER)
+        connection = self.connect.return_value.__enter__.return_value
+        connection.begin.assert_called_once()
+        connection.commit.assert_called_once()
+
+    def test_keyed_stale_event_is_recorded_without_rewriting_the_order(self):
+        snapshot = self.snapshot | {"LastUpdated": "2026-01-01T00:00:00Z"}
+        newer = snapshot | {"LastUpdated": "2026-01-02T00:00:00Z"}
+        self.cursor.execute.side_effect = [1, 1]
+        self.cursor.fetchone.return_value = (json.dumps(newer),)
+        response = self.client.post(self.url, json=snapshot, auth=self.auth, headers={"Idempotency-Key": "a" * 64})
+        self.assertEqual(response.json(), {"order_number": "PO1040078", "status": "stale"})
+        self.assertEqual(self.cursor.execute.call_count, 2)
+        self.connect.return_value.__enter__.return_value.commit.assert_called_once()
+
+    def test_reused_event_id_with_a_different_payload_is_rejected(self):
+        snapshot = self.snapshot | {"LastUpdated": "2026-01-01T00:00:00Z"}
+        self.cursor.execute.side_effect = [0, 1]
+        self.cursor.fetchone.return_value = ("b" * 64,)
+        response = self.client.post(self.url, json=snapshot, auth=self.auth, headers={"Idempotency-Key": "a" * 64})
+        self.assertEqual(response.status_code, 409)
+        self.connect.return_value.__enter__.return_value.commit.assert_not_called()
 
     def test_startup_propagates_database_errors_other_than_a_missing_table(self):
         self.cursor.execute.side_effect = pymysql.OperationalError(2003, "connection refused")

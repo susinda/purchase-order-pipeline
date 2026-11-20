@@ -45,6 +45,7 @@ services:
     volumes:
       - target-db-data:/var/lib/mysql
       - ./api/target/schema.sql:/docker-entrypoint-initdb.d/01-purchase-orders.sql:ro
+      - ./api/target/events_schema.sql:/docker-entrypoint-initdb.d/02-purchase-order-events.sql:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 5s

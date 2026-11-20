@@ -9,7 +9,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
-COPY auth.py database.py init_db.py main.py schema.sql api/target/
+COPY auth.py database.py init_db.py main.py schema.sql events_schema.sql api/target/
 
 USER 10001:10001
 EXPOSE 8001

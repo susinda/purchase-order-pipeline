@@ -2,13 +2,13 @@ import os
 
 from kafka import KafkaConsumer
 
-from .kafka_config import connection_options, required_setting
+from .kafka_config import connection_options, kafka_topic
 
 
 def main():
-    topic = required_setting(os.environ, "KAFKA_TOPIC")
+    topic = kafka_topic(os.environ)
     consumer = KafkaConsumer(
-        **connection_options(os.environ),
+        **connection_options(os.environ, role="producer"),
         client_id="purchaseorders-smoke",
         group_id=None,
         enable_auto_commit=False,

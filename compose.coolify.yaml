@@ -1,0 +1,56 @@
+services:
+  source-api:
+    image: "ghcr.io/susinda/purchase-order-source:${IMAGE_TAG:?}"
+    expose:
+      - "8000"
+    environment:
+      SOURCE_API_USERNAME: "${SOURCE_API_USERNAME:?}"
+      SOURCE_API_PASSWORD: "${SOURCE_API_PASSWORD:?}"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import json
+          from urllib.request import urlopen
+
+          with urlopen('http://127.0.0.1:8000/health', timeout=3) as response:
+              if response.status != 200 or json.load(response) != {'status': 'ok'}:
+                  raise SystemExit('Source API returned an unhealthy response')
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  target-api:
+    image: "ghcr.io/susinda/purchase-order-target:${IMAGE_TAG:?}"
+    expose:
+      - "8001"
+    environment:
+      TARGET_API_USERNAME: "${TARGET_API_USERNAME:?}"
+      TARGET_API_PASSWORD: "${TARGET_API_PASSWORD:?}"
+      MYSQL_HOST: "${MYSQL_HOST:?}"
+      MYSQL_PORT: "${MYSQL_PORT:-3306}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:?}"
+      MYSQL_USER: "${MYSQL_USER:?}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?}"
+    restart: unless-stopped
+    # Target API /health queries purchase_orders with its runtime MySQL credentials.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import json
+          from urllib.request import urlopen
+
+          with urlopen('http://127.0.0.1:8001/health', timeout=8) as response:
+              if response.status != 200 or json.load(response) != {'status': 'ok'}:
+                  raise SystemExit('Target API returned an unhealthy response')
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from integration import k_producer
 
 
-class SingleMessageProducerTest(unittest.TestCase):
+class SingleMessageProducerCliTest(unittest.TestCase):
     def test_sends_one_json_value_to_cli_topic_using_environment_config(self):
         factory = Mock()
         producer = factory.return_value

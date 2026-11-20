@@ -1,0 +1,157 @@
+name: Test, publish, and deploy APIs
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Test and build both APIs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      BUILDKIT_PROGRESS: plain
+      COMPOSE_PROJECT_NAME: purchase-orders-ci
+      SOURCE_API_USERNAME: ci-source-user
+      SOURCE_API_PASSWORD: ci-source-password
+      TARGET_API_USERNAME: ci-target-user
+      TARGET_API_PASSWORD: ci-target-password
+      MYSQL_DATABASE: purchase_orders
+      MYSQL_USER: purchase_orders_app
+      MYSQL_PASSWORD: ci-mysql-password
+      MYSQL_ROOT_PASSWORD: ci-root-password
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Test Kafka producers and consumer
+        run: python3 -m unittest discover -s tests -p 'test_kafka*.py' -v
+
+      - name: Build Source API image
+        run: docker compose build --build-arg APP_IMAGE_TAG="$GITHUB_SHA" source-api
+
+      - name: Test Source API over HTTP
+        run: |
+          docker compose up --no-build --wait --wait-timeout 60 source-api
+          python3 scripts/check_api.py source http://127.0.0.1:8000 --image-tag "$GITHUB_SHA"
+
+      - name: Test MySQL connectivity and schema
+        run: |
+          docker compose --profile target up --wait --wait-timeout 120 target-db
+          docker compose --profile target exec -T -e MYSQL_PWD="$MYSQL_PASSWORD" target-db mysql \
+            --protocol=TCP --host=127.0.0.1 --user="$MYSQL_USER" --database="$MYSQL_DATABASE" \
+            --execute='SELECT COUNT(*) AS stored_orders FROM purchase_orders;'
+
+      - name: Build Target API image
+        run: docker compose --profile target build --build-arg APP_IMAGE_TAG="$GITHUB_SHA" target-api
+
+      - name: Test Target API over HTTP
+        run: |
+          docker compose --profile target up --no-build --wait --wait-timeout 60 target-api
+          python3 scripts/check_api.py target http://127.0.0.1:8001 --image-tag "$GITHUB_SHA"
+
+      - name: Publish both tested images to GHCR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          for api in source target; do
+            container=$(docker compose --profile target ps -q "${api}-api")
+            image_id=$(docker inspect --format '{{.Image}}' "$container")
+            published_image="ghcr.io/susinda/purchase-order-$api:$GITHUB_SHA"
+            docker image tag "$image_id" "$published_image"
+            docker image push "$published_image"
+          done
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose --profile target logs --no-color
+
+      - name: Remove test containers and database
+        if: always()
+        run: docker compose --profile target down --volumes
+
+  deploy:
+    name: Deploy both APIs to Coolify
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      COOLIFY_API_URL: ${{ vars.COOLIFY_API_URL }}
+      COOLIFY_SERVICE_UUID: ${{ vars.COOLIFY_SERVICE_UUID }}
+      SOURCE_API_URL: ${{ vars.SOURCE_API_URL || 'https://source.praxams.com' }}
+      TARGET_API_URL: ${{ vars.TARGET_API_URL || 'https://target.praxams.com' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Update IMAGE_TAG in Coolify
+        env:
+          COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
+        run: bash scripts/deploy_coolify.sh update-tag
+
+      - name: Trigger Coolify deploy
+        env:
+          COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
+        run: bash scripts/deploy_coolify.sh deploy
+
+      - name: Verify both deployed APIs and cloud MySQL
+        run: |
+          python3 scripts/check_api.py health "$SOURCE_API_URL" --image-tag "$GITHUB_SHA"
+          python3 scripts/check_api.py health "$TARGET_API_URL" --image-tag "$GITHUB_SHA"
+
+      - name: Read the deployed Source API with Basic Auth
+        env:
+          SOURCE_API_USERNAME: ${{ secrets.SOURCE_API_USERNAME }}
+          SOURCE_API_PASSWORD: ${{ secrets.SOURCE_API_PASSWORD }}
+        run: |
+          if [[ -z "$SOURCE_API_USERNAME" && -z "$SOURCE_API_PASSWORD" ]]; then
+            echo '::notice::Source API authenticated smoke check skipped because its secrets are absent.'
+            exit 0
+          fi
+          : "${SOURCE_API_USERNAME:?Set the SOURCE_API_USERNAME secret}"
+          : "${SOURCE_API_PASSWORD:?Set the SOURCE_API_PASSWORD secret}"
+          python3 scripts/check_api.py source-smoke "$SOURCE_API_URL"
+
+      - name: Verify Kafka topic metadata from the deployment runner
+        if: vars.KAFKA_BOOTSTRAP_SERVERS != ''
+        timeout-minutes: 2
+        env:
+          KAFKA_BOOTSTRAP_SERVERS: ${{ vars.KAFKA_BOOTSTRAP_SERVERS }}
+          KAFKA_TOPIC: ${{ vars.KAFKA_TOPIC || 'purchaseorders' }}
+          KAFKA_SECURITY_PROTOCOL: ${{ vars.KAFKA_SECURITY_PROTOCOL }}
+          KAFKA_SASL_MECHANISM: ${{ vars.KAFKA_SASL_MECHANISM }}
+          KAFKA_SASL_USERNAME: ${{ secrets.KAFKA_SASL_USERNAME }}
+          KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD }}
+          KAFKA_CA_PEM: ${{ secrets.KAFKA_CA_PEM }}
+        run: |
+          export KAFKA_SECURITY_PROTOCOL="${KAFKA_SECURITY_PROTOCOL:-SASL_SSL}"
+          export KAFKA_SASL_MECHANISM="${KAFKA_SASL_MECHANISM:-SCRAM-SHA-256}"
+          if [[ -n "$KAFKA_CA_PEM" ]]; then
+            KAFKA_SSL_CAFILE=$(mktemp "$RUNNER_TEMP/kafka-ca.XXXXXX")
+            trap 'rm -f -- "$KAFKA_SSL_CAFILE"' EXIT
+            printf '%s\n' "$KAFKA_CA_PEM" > "$KAFKA_SSL_CAFILE"
+            export KAFKA_SSL_CAFILE
+          fi
+          unset KAFKA_CA_PEM
+          python3 -m venv "$RUNNER_TEMP/kafka-smoke"
+          "$RUNNER_TEMP/kafka-smoke/bin/python" -m pip install -r integration/requirements.txt
+          "$RUNNER_TEMP/kafka-smoke/bin/python" -m integration.kafka_check

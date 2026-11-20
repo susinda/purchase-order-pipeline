@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import unittest
@@ -10,7 +11,7 @@ from integration import kafka_producer
 SAMPLE_DATA = Path(__file__).resolve().parents[1] / "requirements_docs" / "sample_data"
 
 
-class KafkaProducerTest(unittest.TestCase):
+class KafkaBatchProducerTest(unittest.TestCase):
     def setUp(self):
         self.producer = Mock()
         self.factory = Mock(return_value=self.producer)
@@ -20,6 +21,7 @@ class KafkaProducerTest(unittest.TestCase):
         return kafka_producer.publish_load(
             load_type,
             source_url="http://source.local:8000/",
+            source_auth=("source-user", "source-password"),
             topic="purchaseorders",
             producer_factory=self.factory,
             producer_options=self.options,
@@ -61,9 +63,14 @@ class KafkaProducerTest(unittest.TestCase):
                 with patch.object(kafka_producer, "urlopen", return_value=io.BytesIO(fixture)) as http:
                     batch_id, count = self.publish(load_type)
 
-                http.assert_called_once_with(
-                    f"http://source.local:8000/purchase-orders?load_type={load_type}", timeout=30
+                http.assert_called_once()
+                request = http.call_args.args[0]
+                self.assertEqual(
+                    request.full_url, f"http://source.local:8000/purchase-orders?load_type={load_type}"
                 )
+                credentials = base64.b64encode(b"source-user:source-password").decode("ascii")
+                self.assertEqual(request.get_header("Authorization"), f"Basic {credentials}")
+                self.assertEqual(http.call_args.kwargs, {"timeout": 30})
                 self.factory.assert_called_once_with(**self.options)
                 self.assertEqual(count, expected_count)
                 self.assertEqual(self.producer.send.return_value.get.call_count, count)

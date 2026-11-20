@@ -5,6 +5,9 @@ services:
       dockerfile: api/source/Dockerfile
     ports:
       - "127.0.0.1:8000:8000"
+    environment:
+      SOURCE_API_USERNAME: "${SOURCE_API_USERNAME:-}"
+      SOURCE_API_PASSWORD: "${SOURCE_API_PASSWORD:-}"
     healthcheck:
       test:
         - CMD
@@ -14,3 +17,41 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+
+  target-api:
+    profiles: [target]
+    build:
+      context: .
+      dockerfile: api/target/Dockerfile
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment:
+      TARGET_API_USERNAME: ${TARGET_API_USERNAME:-}
+      TARGET_API_PASSWORD: ${TARGET_API_PASSWORD:-}
+      MYSQL_HOST: target-db
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-purchase_orders}
+      MYSQL_USER: ${MYSQL_USER:-purchase_orders_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+    depends_on:
+      target-db:
+        condition: service_healthy
+
+  target-db:
+    profiles: [target]
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-purchase_orders}
+      MYSQL_USER: ${MYSQL_USER:-purchase_orders_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-}
+    volumes:
+      - target-db-data:/var/lib/mysql
+      - ./api/target/schema.sql:/docker-entrypoint-initdb.d/01-purchase-orders.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  target-db-data:

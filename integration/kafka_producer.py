@@ -1,9 +1,10 @@
 import argparse
+import base64
 import hashlib
 import json
 import os
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from .kafka_config import connection_options, required_setting
 
@@ -21,12 +22,13 @@ def kafka_config(env):
     }
 
 
-def fetch_extract(source_url, load_type):
+def fetch_extract(source_url, load_type, source_auth):
     query = urlencode({"load_type": load_type})
-    with urlopen(
-        f"{source_url.rstrip('/')}/purchase-orders?{query}",
-        timeout=SOURCE_TIMEOUT_SECONDS,
-    ) as response:
+    request = Request(f"{source_url.rstrip('/')}/purchase-orders?{query}")
+    username, password = source_auth
+    credentials = base64.b64encode(f"{username}:{password}".encode("ascii")).decode("ascii")
+    request.add_unredirected_header("Authorization", f"Basic {credentials}")
+    with urlopen(request, timeout=SOURCE_TIMEOUT_SECONDS) as response:
         return json.load(response)
 
 
@@ -68,8 +70,8 @@ def prepare_messages(extract, load_type):
     return batch_id, messages
 
 
-def publish_load(load_type, *, source_url, topic, producer_factory, producer_options):
-    extract = fetch_extract(source_url, load_type)
+def publish_load(load_type, *, source_url, source_auth, topic, producer_factory, producer_options):
+    extract = fetch_extract(source_url, load_type, source_auth)
     batch_id, messages = prepare_messages(extract, load_type)
     if not messages:
         return batch_id, 0
@@ -93,6 +95,10 @@ def main():
     try:
         producer_options = kafka_config(os.environ)
         topic = required_setting(os.environ, "KAFKA_TOPIC")
+        source_auth = (
+            required_setting(os.environ, "SOURCE_API_USERNAME"),
+            required_setting(os.environ, "SOURCE_API_PASSWORD"),
+        )
     except ValueError as exc:
         parser.error(str(exc))
 
@@ -101,6 +107,7 @@ def main():
     batch_id, count = publish_load(
         args.load_type,
         source_url=os.environ.get("SOURCE_API_URL", "http://127.0.0.1:8000"),
+        source_auth=source_auth,
         topic=topic,
         producer_factory=KafkaProducer,
         producer_options=producer_options,

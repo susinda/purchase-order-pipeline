@@ -1,9 +1,12 @@
 import json
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
+
+from api.auth import create_api
 
 
 LoadType = Literal["initial", "incremental"]
@@ -34,14 +37,24 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Purchase Order Source API", lifespan=lifespan)
+app, protected = create_api(
+    title="Purchase Order Source API",
+    realm="purchase-order-source",
+    credentials_prefix="SOURCE_API",
+    lifespan=lifespan,
+)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health(response: Response) -> dict[str, str]:
+    if image_tag := os.environ.get("APP_IMAGE_TAG"):
+        response.headers["X-Image-Tag"] = image_tag
     return {"status": "ok"}
 
 
-@app.get("/purchase-orders")
+@protected.get("/purchase-orders", responses={401: {"description": "Basic authentication required"}})
 def get_purchase_orders(request: Request, load_type: LoadType) -> dict:
     return request.app.state.extracts[load_type]
+
+
+app.include_router(protected)

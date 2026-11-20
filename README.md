@@ -2,20 +2,20 @@
 
 A cloud-hosted, scheduled pipeline for moving purchase-order snapshots from a FastAPI source through Kafka to two independent destinations: a FastAPI target system and Snowflake. Airflow orchestrates each finite batch, and dbt builds reporting models over the required relational tables.
 
-> **Project status:** The fixture-backed Source API, standalone Kafka producer and Kafka inspection consumer are implemented. Airflow orchestration, the Target API, Snowflake and dbt are planned.
+> **Project status:** The fixture-backed Source API, MySQL-backed Target API, standalone Kafka producer and Kafka inspection consumer are implemented. Airflow orchestration, Kafka delivery to the Target API, Snowflake and dbt are planned.
 
 ## Run the Source API
 
-From the repository root, build and start the service:
+Set `SOURCE_API_USERNAME` and `SOURCE_API_PASSWORD` in your local `.env`. Use ASCII credentials and a username without a colon. From the repository root, build and start the service.
 
 ```bash
 docker compose up --build -d
 curl http://127.0.0.1:8000/health
-curl 'http://127.0.0.1:8000/purchase-orders?load_type=initial'
-curl 'http://127.0.0.1:8000/purchase-orders?load_type=incremental'
+curl --user 'your-source-username' 'http://127.0.0.1:8000/purchase-orders?load_type=initial'
+curl --user 'your-source-username' 'http://127.0.0.1:8000/purchase-orders?load_type=incremental'
 ```
 
-The API returns the full JSON envelopes from `requirements_docs/sample_data/`, with 100 initial records and 20 incremental records. The `load_type` parameter is required and accepts `initial` or `incremental`. Interactive API docs are at [localhost:8000/docs](http://127.0.0.1:8000/docs). Use `docker compose down` to stop the service.
+The API returns the full JSON envelopes from `requirements_docs/sample_data/`, with 100 initial records and 20 incremental records. The `load_type` parameter is required and accepts `initial` or `incremental`. Use `docker compose down` to stop the service.
 
 To run with Python 3.12 from the repository root:
 
@@ -23,24 +23,119 @@ To run with Python 3.12 from the repository root:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r api/source/requirements.txt
+set -a
+source ./.env
+set +a
 python -m uvicorn api.source.main:app
 ```
 
-## Publish an extract to Kafka
+## Run the Target API
 
-Start the Source API, then run the producer from the repository root:
+Set `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` in your local `.env` using the names in `.env.example`. Use ASCII for the Basic Auth credentials and separate passwords for the API, MySQL application user and MySQL root. Use HTTPS for Basic Auth outside local development. The Compose target profile starts the API and an internal MySQL server with a persistent named volume. MySQL initializes the database and table on first startup.
 
 ```bash
-python -m pip install -r integration/requirements.txt
-cp .env.example .env
+docker compose --profile target up --build -d target-api
+curl http://127.0.0.1:8001/health
 ```
 
-Edit `.env` with the broker address, topic, username, password and path to the Aiven CA certificate. The example uses the supplied topic name `purchaseorders`. Set `KAFKA_TOPIC` to your actual topic and `SOURCE_API_URL` to the base URL of the Source API. Both `.env` and `ca.pem` are gitignored. Quote values that contain shell special characters before sourcing the file. [Aiven Python connection guide](https://aiven.io/docs/products/kafka/howto/connect-with-python)
+`PUT /purchase-orders/{order_number}` accepts one JSON order. Its `OrderNumber` must match the URL. Supply the Basic Auth username when prompted for the password by curl.
+
+```bash
+curl -i --user 'your-target-username' \
+  -X PUT http://127.0.0.1:8001/purchase-orders/PO1040078 \
+  -H 'Content-Type: application/json' \
+  -d '{"OrderNumber":"PO1040078","OrderStatus":"Open","OrderLines":[]}'
+```
+
+| HTTP status | Result |
+|---|---|
+| `201 Created` | `inserted` |
+| `200 OK` | `updated` if the snapshot changed, or `duplicate` if it already matched |
+| `401 Unauthorized` | Missing or invalid Basic Auth credentials |
+| `422 Unprocessable Content` | Invalid order or mismatched `OrderNumber` |
+| `500 Internal Server Error` / `503 Service Unavailable` | Database operation failed or the database is unavailable |
+
+MySQL stores one complete snapshot per order number, including all nested rows. Duplicate detection compares the whole current JSON document. Object field order is ignored, and arrays are compared in order. A changed snapshot replaces the previous one. Version ordering and replay of older events remain part of the Kafka delivery work.
+
+### Initialize an external MySQL database
+
+Run this once from a machine that can reach the existing database, before deploying the Target API. Use a setup account with `CREATE` permission on the database. Give the Target API runtime account `SELECT`, `INSERT`, and `UPDATE` on `purchase_orders`.
+
+```bash
+source .venv/bin/activate
+python -m pip install -r api/target/requirements.txt
+(
+  export MYSQL_HOST='your-mysql-host' MYSQL_PORT=3306
+  export MYSQL_DATABASE='your-database' MYSQL_USER='your-setup-user'
+  printf 'MySQL setup password: '
+  read -rs MYSQL_PASSWORD
+  printf '\n'
+  export MYSQL_PASSWORD
+  python -m api.target.init_db
+)
+```
+
+The command applies [schema.sql](api/target/schema.sql), which creates `purchase_orders` if it is missing and preserves existing rows. The local MySQL Compose service already applies the same file when it first initializes its volume. Keep cloud initialization as a separate provisioning step. If the schema evolves, run versioned migrations before deployment from an environment with database access.
+
+## API authentication and Swagger
+
+Both APIs use Basic Auth for purchase-order requests and Swagger UI. Open [Source Swagger](http://127.0.0.1:8000/docs) or [Target Swagger](http://127.0.0.1:8001/docs) and sign in with that API's credentials. Swagger's **Authorize** control is available for making requests from the UI. The OpenAPI JSON that Swagger loads is also protected.
+
+`GET /health` is public on both services so container and deployment probes can check readiness without credentials. Use HTTPS when sending Basic Auth credentials outside local development.
+
+## Prepare Aiven Kafka
+
+Complete these steps once for each Kafka environment.
+
+1. **Create the topic.** Open your Kafka service and select **Topics → Create topic**. Create a classic topic named `purchaseorders`, the name in `.env.example`, or set `KAFKA_TOPIC` to the exact name of your existing topic. Use one partition for the demo and a replication factor supported by your service plan. Create `purchaseorders-test` as well if you want a dedicated topic for the single-message test below. [Aiven topic setup](https://aiven.io/docs/products/kafka/howto/create-topic)
+2. **Create a service user.** Open **Access & Control → Users** and create a dedicated Kafka user such as `purchaseorders-demo`. Use its generated password and save it in your local `.env` or runtime secret store. When deploying independent workers, give the producer and each consumer their own service user so their permissions can be managed independently. [Aiven service users](https://aiven.io/docs/products/kafka/howto/add-manage-service-users)
+3. **Choose consumer group IDs.** Use `purchaseorders-consumer` for the inspection CLI. Reserve `target-api-group` and `snowflake-group` for the delivery workers. Kafka forms a group when the first authorized consumer joins with that ID. You can grant access to the ID before starting the consumer. Set `KAFKA_CONSUMER_GROUP_ID` to the group you granted. [Apache Kafka consumer groups](https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html)
+4. **Grant access.** In **Access & Control → ACL → Kafka-native ACLs**, add the applicable rules below. Set permission type to `ALLOW`, principal to `User:<service-username>`, pattern type to `LITERAL`, and host to `*` if access should work from any client IP. Use the exact topic and group names. For `GroupAuthorizationFailedError`, check the saved group rule and any matching `DENY` entries. [Aiven ACL setup](https://aiven.io/docs/products/kafka/howto/manage-acls#add-a-kafka-native-acl-entry)
+
+   | Client | Operation | Resource type | Resource |
+   |---|---|---|---|
+   | Producer | Write | Topic | `purchaseorders` |
+   | Consumer | Read | Topic | `purchaseorders` |
+   | Consumer | Read | Group | Its exact group ID, such as `purchaseorders-consumer` |
+
+   If you use one service user for the demo, apply all three rules to that user. If you create the optional test topic, grant the producer `Write` and the inspection consumer `Read` on `purchaseorders-test` too.
+
+5. **Get the connection settings and CA certificate.** In the Kafka service, open **Overview → Quick connect → Python**. Select your topic, **SASL**, and your service user. Under **Downloads**, download the CA certificate and save it as `ca.pem` in the repository root. Copy the SASL host and port into `KAFKA_BOOTSTRAP_SERVERS`. Set `KAFKA_SECURITY_PROTOCOL=SASL_SSL`, `KAFKA_SASL_MECHANISM=SCRAM-SHA-256`, `KAFKA_SASL_USERNAME` and `KAFKA_SASL_PASSWORD` for that user, and `KAFKA_SSL_CAFILE=./ca.pem`. [Aiven Python connection guide](https://aiven.io/docs/products/kafka/howto/connect-with-python)
+
+Use these commands from the repository root to set up the virtual environment and install the Kafka client.
+
+```bash
+test -d .venv || python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r integration/requirements.txt
+test -f .env || (umask 077 && cp .env.example .env)
+```
+
+Fill in `.env` with the settings above. Quote values containing shell special characters. Git ignores `.env` and `ca.pem`.
 
 ```bash
 set -a
 source ./.env
 set +a
+```
+
+### Automate the one-time setup later
+
+A manually triggered GitHub Actions workflow can call the Aiven API or run the Aiven CLI against an existing service. Use `workflow_dispatch` and scope the Aiven management API token to the provisioning job through a GitHub environment secret. Keep runtime SASL credentials in the application secret store. [Aiven API reference](https://api.aiven.io/doc/) · [Manual GitHub Actions workflows](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) · [GitHub Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
+
+| Setup task | Automation |
+|---|---|
+| Create a topic | Check for the desired topic and create it with `avn service topic-create` if missing. [Aiven topic CLI](https://aiven.io/docs/tools/cli/service/topic) |
+| Create a service user | Create a missing user with `avn service user-create`. Keep existing users and deliver generated credentials to the runtime secret store without logging them. [Aiven user CLI](https://aiven.io/docs/tools/cli/service/user) |
+| Grant access | Compare the existing rules with the desired topic and group rules. Add missing rules with `avn service kafka-acl-add`. [Aiven ACL CLI](https://aiven.io/docs/tools/cli/service/kafka-acl) |
+| Set up consumer groups | Provision ACLs for the chosen group IDs and start the consumers with those IDs. Kafka forms the groups on first join. [Apache Kafka consumer groups](https://kafka.apache.org/41/javadoc/org/apache/kafka/clients/consumer/KafkaConsumer.html) |
+| Retrieve the CA | Use `avn service ca get SERVICE_NAME --target-filepath ca.pem` for the selected service. [Aiven CA CLI](https://aiven.io/docs/tools/cli/service-cli#avn-service-ca-get) |
+
+## Publish an extract to Kafka
+
+Start the Source API and load the Kafka environment above before running the producer. Set `SOURCE_API_URL` to the API base URL and supply its `SOURCE_API_USERNAME` and `SOURCE_API_PASSWORD` to the producer.
+
+```bash
 python -m integration.kafka_producer initial
 python -m integration.kafka_producer incremental
 ```
@@ -65,11 +160,11 @@ With the same Kafka environment variables loaded, run the inspection consumer:
 python -m integration.kafka_consumer --max-messages 20 --idle-timeout 10
 ```
 
+To inspect the optional smoke-test topic, prefix the command with `KAFKA_TOPIC=purchaseorders-test`.
+
 It prints each message's UTF-8 key and value with its partition and offset, then commits the offset for the inspection group. Omit both flags to keep listening until Ctrl+C.
 
 The default inspection group is `purchaseorders-consumer`. It resumes at its committed offsets on restart. Set `KAFKA_CONSUMER_GROUP_ID` to a fresh group to read retained messages from the beginning with the default `KAFKA_AUTO_OFFSET_RESET=earliest`. Use a dedicated inspection group to keep delivery workers' offsets independent. Set `KAFKA_CONSUMER_CLIENT_ID` to override the default client ID.
-
-Run the producer and consumer tests with `python -m unittest discover -s tests -v`. They use mocked HTTP and Kafka calls.
 
 ## Problem
 
@@ -168,7 +263,7 @@ flowchart LR
 	DEV -. no full local stack .-> CLOUD
 ```
 
-The cloud provider/product for Airflow and Kafka remains to be selected. Whatever is chosen must provide secure connectivity from Airflow to Kafka, Snowflake and the Coolify-hosted APIs. Keep services private where possible; otherwise use HTTPS, authentication, TLS for Kafka, restricted network rules and carefully scoped credentials.
+Development uses Aiven for Kafka. The Airflow provider remains open and must provide secure connectivity to Kafka, Snowflake and the Coolify-hosted APIs. Keep services private where possible. For public endpoints, use HTTPS, authentication, TLS for Kafka, restricted network rules and scoped credentials.
 
 ### Batch and retry flow
 
@@ -233,12 +328,12 @@ Keep measures at their natural grain. Joining coding rows and receipts directly 
 |---|---|---|---|
 | Processing style | Daily scheduled micro-batches, with manual trigger for demo extracts. | Low volume and no real-time SLA are assumed; fits Airflow and finite fixture files. | Move to continuous consumers if a low-latency SLA or volume requires it. |
 | API placement | Source and target FastAPI services deployed on the user's Coolify cloud instance. | Cloud Airflow cannot reliably reach a laptop-local service; the laptop is resource-constrained. | Revisit if networking, availability or isolation requirements outgrow this host. |
-| Kafka and Airflow | Cloud-hosted services; provider and deployment method TBD. | Keeps the laptop free of the heavyweight runtime and enables cloud-to-cloud connectivity. | Select a managed or self-managed option after checking cost, connectivity and free-tier limits. |
+| Kafka and Airflow | Aiven for development Kafka. Cloud Airflow provider TBD. | Keeps the laptop free of the heavyweight runtime and enables cloud-to-cloud connectivity. | Select Airflow after checking cost, connectivity and free-tier limits. |
 | Fan-out and recovery | One canonical topic, separate destination consumer groups, destination-specific retry tiers and DLTs. | Independent progress and failure handling without duplicating the producer stream. | Retry delay needs a worker/scheduler; at-least-once delivery requires idempotency and DLT operations. |
 | Kafka payload | One complete order per event, keyed by order number. | Preserves order boundaries and supports partition affinity and replay. | Batch-level metadata must be tracked separately. |
 | Batch orchestration | Three logical Airflow DAGs: extract/publish, Target delivery, warehouse ingestion/dbt. | Keeps source and destination responsibilities distinct. | Requires explicit cross-DAG batch completion and prevents unsafe overlapping runs. |
 | Incremental semantics | Latest complete snapshot replaces current header and child state. | Matches the stated meaning of incremental records and handles child removals. | Requires timestamp normalization, deterministic ties and atomic reconciliation. |
-| Target API | Idempotent version-aware upsert, proposed `PUT /purchase-orders/{order_number}`. | Retry after timeout must not duplicate effects; newer order versions remain valid updates. | HTTP method/schema are assumptions until the contract is implemented. |
+| Target API | Basic Auth and MySQL-backed `PUT /purchase-orders/{order_number}` with full-snapshot duplicate detection. | A retry of the current snapshot returns success without changing the stored order. | Version-aware replay still needs a `LastUpdated` comparison and deterministic tie-break. |
 | Warehouse model | Ingestion maintains the four relational tables; dbt builds analytics on top. | Follows the requirement that dbt's dimensional model sits on the four tables. | Transformation logic is split between ingestion SQL/code and dbt. |
 | Optional work | Kubernetes and OpenTelemetry after required acceptance tests pass. | Protects the timebox and cloud budget. | Bonus work may be omitted if it puts correctness or delivery at risk. |
 
@@ -259,7 +354,8 @@ Check items as they are completed. The checklist is a plan; unchecked items are 
 
 - [x] Serve the existing fictional fixtures from `requirements_docs/sample_data/`.
 - [x] Implement the deterministic Source API with explicit `initial` and `incremental` modes and response-count validation.
-- [ ] Implement the Target API with persistent state, processed-event idempotency and stale-version protection.
+- [x] Implement the Target API with persistent state, Basic Auth and full-snapshot duplicate detection.
+- [ ] Add processed-event idempotency and stale-version protection for Kafka delivery.
 - [ ] Add API health checks, input validation, authentication and useful structured logs.
 - [ ] Build and deploy both APIs to the Coolify instance; confirm Airflow can reach their HTTPS endpoints.
 
@@ -288,7 +384,8 @@ Check items as they are completed. The checklist is a plan; unchecked items are 
 - [ ] Test child-row removal, cancelled orders/lines, null `ProjectCode`, string quantities and negative receipt reversals.
 - [ ] Simulate Target API and Snowflake failures; confirm independent recovery and safe offset behavior.
 - [ ] Confirm final current header count is 104 and calculate child counts from latest snapshots.
-- [ ] Add GitHub Actions for tests, lint/type checks and container builds; keep deployment gated/approved.
+- [x] Add GitHub Actions for tests and builds of both API images.
+- [ ] Add lint and type checks and keep deployment gated.
 - [ ] Record actual run counts, limitations, provider choices and screenshots/log evidence for the walkthrough.
 - [ ] Consider Kubernetes and OpenTelemetry only after the required path is green.
 
@@ -307,7 +404,9 @@ purchase-order-pipeline/
 │       └── purchased_order_incremental.json
 ├── api/
 │   ├── source/
+│   │   └── Dockerfile
 │   └── target/
+│       └── Dockerfile
 ├── integration/
 │   ├── event_contract.py
 │   ├── kafka_producer.py
@@ -337,19 +436,41 @@ purchase-order-pipeline/
 
 ## Build, commit and deploy
 
-The Source API commands are in [Run the Source API](#run-the-source-api). The examples below describe the planned workflow for the rest of the pipeline.
+See [Run the Source API](#run-the-source-api) and [Run the Target API](#run-the-target-api) for startup commands.
+
+- [`compose.yaml`](compose.yaml) builds the API images from the repository and can start a local MySQL database. GitHub Actions also uses it for integration tests.
+- [`compose.coolify.yaml`](compose.coolify.yaml) pulls the two published images from GHCR and connects the Target API to the external MySQL database.
 
 ### Local development
 
 The intended local workflow is to run lightweight unit/contract tests on the laptop, while connecting to cloud Kafka, Airflow and Snowflake only with development credentials. Do not start a full local Kafka/Airflow stack by default.
 
-Planned validation commands (update to match the chosen Python tooling):
+Run the full suite locally with Python 3.12.
 
 ```bash
-python -m venv .venv
+test -d .venv || python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.txt
-pytest
+python -m pip install \
+  -r api/source/requirements.txt \
+  -r api/target/requirements.txt \
+  -r integration/requirements.txt \
+  'httpx>=0.28,<1'
+python -m unittest discover -s tests -v
+```
+
+The Source API tests call the FastAPI app with the committed fixtures. The Target API and Kafka tests mock their external services. The single-message Kafka CLI and the batch Kafka producer have separate test files.
+
+Each API has its own Dockerfile and runs the full test suite during the image build. A failing test blocks either build. Use the repository root as the build context so Docker can access the shared auth module, tests, and fixtures.
+
+```bash
+docker build -f api/source/Dockerfile -t purchase-order-source .
+docker build -f api/target/Dockerfile -t purchase-order-target .
+```
+
+Docker may reuse a successful test layer when its inputs are unchanged. To force a fresh test run and see the results in the Docker log, use Compose.
+
+```bash
+BUILDKIT_PROGRESS=plain docker compose --profile target build --no-cache source-api target-api
 ```
 
 Use `.env.example` for variable names and placeholder values. Keep real credentials in local ignored `.env` files or cloud secret stores. Never commit Snowflake keys/passwords, Kafka certificates, API tokens, provider state files or real customer data.
@@ -370,14 +491,39 @@ The staging paths above are examples and become valid after those files exist. U
 
 ### CI and cloud deployment
 
-1. GitHub Actions should run tests, formatting/lint checks and container builds on pull requests and pushes.
-2. Deploy API images from the personal GitHub repository to the Coolify instance using a protected deployment credential. Keep the Source and Target API configuration separate.
-3. Deploy DAG code to the selected Airflow service using its supported Git/DAG synchronization method. Configure provider connections and secrets in Airflow's secret backend or connection manager.
-4. Provision/configure Kafka and Snowflake separately from application code. Use infrastructure-as-code only if it can be safely validated and state is secured; do not enable unattended destructive applies.
-5. Configure the Snowflake-managed dbt project to pull from the repository and run after the warehouse DAG reports a complete batch. Check dbt tests and run history.
-6. Smoke-test both deployed API health endpoints, Kafka publish/consume, Snowflake row counts and dbt completion. A successful image build or infrastructure plan alone is not end-to-end evidence.
+The [API workflow](.github/workflows/api-build.yml) uses the same API Dockerfiles through Compose. It runs the mocked Kafka tests, builds and tests the Source API over HTTP, verifies connectivity and schema access on disposable MySQL, then builds and tests the Target API over HTTP. The target test covers Basic Auth, insert, update, and duplicates using that database.
 
-Coolify, Airflow, Kafka and dbt deployment commands will be added after provider choices and implementation files are in place.
+Pull requests run the checks. A successful push to `main` or manual run from `main` publishes both tested images to GHCR with the same commit SHA tag. The workflow updates `IMAGE_TAG` in the Coolify Service and triggers its deployment. It waits for both HTTPS health endpoints to report the image tag embedded at build time. The deployed Target API health endpoint queries the cloud MySQL table.
+
+With Source API credentials configured in GitHub, the workflow makes one authenticated HTTPS request for the incremental extract and checks it against the release fixture. With a Kafka broker configured in GitHub, it also checks that the topic is visible from the GitHub runner using the configured Kafka credentials. The Kafka check fetches metadata without producing or consuming messages. For a private broker or to check reachability from a producer or consumer host, run `python -m integration.kafka_check` there with the same Kafka environment as that client.
+
+#### One-time Coolify and GitHub setup
+
+1. In Coolify, use one **Docker Compose Empty** Service containing the contents of [compose.coolify.yaml](compose.coolify.yaml). Map `https://source.praxams.com` to `source-api` on internal port `8000` and `https://target.praxams.com` to `target-api` on internal port `8001`. Create the `IMAGE_TAG` variable. If GHCR packages are private, configure read access for the Coolify deployment server. [Coolify Compose Services](https://coolify.io/docs/services/configuration/docker-compose)
+2. Enter `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD`, `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, and the external MySQL settings as Coolify runtime variables. Run [the MySQL initializer](#initialize-an-external-mysql-database) before the first deployment.
+3. Create a GitHub Actions environment named `production` for the deployment variables. Add the token under **Settings → Secrets and variables → Actions → Repository secrets**.
+
+   | Kind | Name | Value |
+   |---|---|---|
+   | Variable | `COOLIFY_API_URL` | Coolify API base URL, such as `https://coolify.example.com/api/v1` |
+   | Variable | `COOLIFY_SERVICE_UUID` | UUID immediately after `/service/` in the Coolify page URL |
+   | Optional variable | `SOURCE_API_URL` | Defaults to `https://source.praxams.com` |
+   | Optional variable | `TARGET_API_URL` | Defaults to `https://target.praxams.com` |
+   | Repository secret | `COOLIFY_AUTH_TOKEN` | Coolify API token scoped to the Service with `write` and `deploy` permissions |
+   | Optional `production` secrets | `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD` | Set both to enable the authenticated Source API smoke check |
+   | Optional `production` variable | `KAFKA_BOOTSTRAP_SERVERS` | Set to enable the Kafka metadata check from GitHub Actions |
+   | Optional `production` variables | `KAFKA_TOPIC`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Default to `purchaseorders`, `SASL_SSL`, and `SCRAM-SHA-256` |
+   | `production` secrets for Kafka | `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, `KAFKA_CA_PEM` | Supply the SASL credentials for SASL connections and the CA certificate PEM when the broker needs a custom CA |
+
+GitHub Actions uses its built-in token to publish the images. Cloud database credentials stay in Coolify. [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) · [Coolify API permissions](https://coolify.io/docs/api/permissions)
+
+#### Remaining pipeline deployments
+
+1. Deploy the DAGs to the selected Airflow service and configure provider connections in its secret store.
+2. Provision Kafka and Snowflake, configure the Snowflake-managed dbt project, and run dbt after a complete warehouse batch.
+3. Verify Kafka delivery to both destinations, Snowflake row counts, and dbt completion over a full run.
+
+Airflow, Kafka, and dbt deployment commands will be added as those components are implemented.
 
 ## Future work
 

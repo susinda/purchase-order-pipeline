@@ -70,15 +70,38 @@ jobs:
           : "${SOURCE_API_URL:?Set SOURCE_API_URL in the test environment}"
           : "${TARGET_API_URL:?Set TARGET_API_URL in the test environment}"
 
-      - name: Update IMAGE_TAG in Coolify
+      - name: Update IMAGE_TAG and trigger Coolify deployment
+        shell: bash
         env:
           COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
-        run: bash scripts/deploy_coolify.sh update-tag
+        run: |
+          : "${COOLIFY_API_URL:?Set COOLIFY_API_URL in the test environment}"
+          : "${COOLIFY_SERVICE_UUID:?Set COOLIFY_SERVICE_UUID in the test environment}"
+          : "${COOLIFY_AUTH_TOKEN:?Set the COOLIFY_AUTH_TOKEN GitHub Actions secret}"
 
-      - name: Trigger Coolify deploy
-        env:
-          COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
-        run: bash scripts/deploy_coolify.sh deploy
+          api_url=${COOLIFY_API_URL%/}
+          curl_coolify() {
+            curl --proto '=https' --fail --silent --show-error --max-time 15 \
+              --header "Authorization: Bearer $COOLIFY_AUTH_TOKEN" \
+              --header 'Accept: application/json' \
+              --header 'Content-Type: application/json' "$@"
+          }
+
+          echo 'Updating Coolify IMAGE_TAG'
+          tag_update=$(jq -cn --arg tag "$GITHUB_SHA" '{key: "IMAGE_TAG", value: $tag}')
+          curl_coolify --request PATCH --data "$tag_update" \
+            "$api_url/services/$COOLIFY_SERVICE_UUID/envs" > /dev/null
+          printf 'Updated Coolify IMAGE_TAG to %s\n' "$GITHUB_SHA"
+
+          echo 'Requesting Coolify deployment'
+          message=$(curl_coolify --request POST "$api_url/deploy?uuid=$COOLIFY_SERVICE_UUID&force=false" |
+            jq -er --arg uuid "$COOLIFY_SERVICE_UUID" '
+              .deployments[] | select(.resource_uuid == $uuid) | .message | strings')
+          if [[ "$message" != "Service "* ]]; then
+            printf 'Coolify did not accept deployment: %s\n' "$message" >&2
+            exit 1
+          fi
+          printf '%s\n' "$message"
 
       # Coolify queues deployments asynchronously. The old release may still
       # answer while images pull and start, so wait for this commit on both APIs.

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from api.source.main import app
 
 
-SAMPLE_DATA = Path(__file__).resolve().parents[1] / "requirements_docs" / "sample_data"
+SAMPLE_DATA = Path(__file__).resolve().parents[1] / "api" / "source" / "sample_data"
 
 
 class SourceApiTest(unittest.TestCase):

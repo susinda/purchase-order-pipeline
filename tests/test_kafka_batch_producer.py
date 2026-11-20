@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from integration import kafka_producer
 
 
-SAMPLE_DATA = Path(__file__).resolve().parents[1] / "requirements_docs" / "sample_data"
+SAMPLE_DATA = Path(__file__).resolve().parents[1] / "api" / "source" / "sample_data"
 
 
 class KafkaBatchProducerTest(unittest.TestCase):

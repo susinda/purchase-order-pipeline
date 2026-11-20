@@ -1,13 +1,9 @@
 import argparse
 import os
-from pathlib import Path
 
 import pymysql
 
-from .database import connection_options
-
-
-SCHEMA = Path(__file__).with_name("schema.sql")
+from .database import connection_options, initialize_schema
 
 
 def main():
@@ -20,9 +16,7 @@ def main():
 
     try:
         options = connection_options()
-        with pymysql.connect(**options) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(SCHEMA.read_text(encoding="utf-8"))
+        initialize_schema(options, check_existing=False)
     except (ValueError, RuntimeError, OSError, pymysql.MySQLError) as error:
         parser.exit(1, f"Could not initialize the Target API schema: {error}\n")
 

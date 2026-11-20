@@ -6,11 +6,11 @@ from typing import Literal
 
 from fastapi import FastAPI, Request, Response
 
-from api.auth import create_api
+from .auth import create_api
 
 
 LoadType = Literal["initial", "incremental"]
-SAMPLE_DATA_DIR = Path(__file__).resolve().parents[2] / "requirements_docs" / "sample_data"
+SAMPLE_DATA_DIR = Path(__file__).with_name("sample_data")
 
 
 def read_extract(load_type: LoadType) -> dict:

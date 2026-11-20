@@ -28,13 +28,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Build both API images and run unit tests
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Run unit tests
+        run: |
+          python -m pip install -r api/source/requirements.txt -r api/target/requirements.txt \
+            -r integration/requirements.txt 'httpx>=0.28,<1'
+          python -m unittest discover -s tests -v
+
+      - name: Build both API images
         shell: bash
         run: |
           for api in source target; do
-            docker build --file "api/$api/Dockerfile" \
-              --build-arg APP_IMAGE_TAG="$GITHUB_SHA" \
-              --tag "ghcr.io/susinda/purchase-order-$api:$GITHUB_SHA" .
+            docker build --build-arg APP_IMAGE_TAG="$GITHUB_SHA" \
+              --tag "ghcr.io/susinda/purchase-order-$api:$GITHUB_SHA" "api/$api"
           done
 
       - name: Publish both tested images to GHCR
@@ -77,11 +86,12 @@ jobs:
         env:
           COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
         run: |
+          # The bulk endpoint also creates IMAGE_TAG on the first deploy.
           curl -fsS --proto '=https' --max-time 15 -X PATCH \
-            "${COOLIFY_API_URL%/}/services/$COOLIFY_SERVICE_UUID/envs" \
+            "${COOLIFY_API_URL%/}/services/$COOLIFY_SERVICE_UUID/envs/bulk" \
             -H "Authorization: Bearer $COOLIFY_AUTH_TOKEN" \
             -H 'Accept: application/json' -H 'Content-Type: application/json' \
-            -d "{\"key\":\"IMAGE_TAG\",\"value\":\"$GITHUB_SHA\"}" -o /dev/null
+            -d "{\"data\":[{\"key\":\"IMAGE_TAG\",\"value\":\"$GITHUB_SHA\"}]}" -o /dev/null
 
       - name: Trigger Coolify deployment
         shell: bash
@@ -95,12 +105,12 @@ jobs:
               .deployments[] | select(.resource_uuid == $uuid) | .message |
               if startswith("Service ") then . else error("Coolify did not accept deployment: " + .) end'
 
-      # Live API checks are paused while Coolify deploys asynchronously.
-
-      # - name: Wait for both deployed APIs to serve the new release
-      #   run: |
-      #     python3 scripts/check_api.py health "$SOURCE_API_URL" --image-tag "$GITHUB_SHA"
-      #     python3 scripts/check_api.py health "$TARGET_API_URL" --image-tag "$GITHUB_SHA"
+      # Coolify queues deployments asynchronously. Wait for both APIs to
+      # report the new image tag before marking the deployment healthy.
+      - name: Verify both APIs are healthy on the deployed commit
+        run: |
+          python3 scripts/check_api.py health "$SOURCE_API_URL" --image-tag "$GITHUB_SHA"
+          python3 scripts/check_api.py health "$TARGET_API_URL" --image-tag "$GITHUB_SHA"
 
       # - name: Read the deployed Source API with Basic Auth
       #   env:

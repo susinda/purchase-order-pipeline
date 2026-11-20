@@ -1,8 +1,7 @@
 services:
   source-api:
     build:
-      context: .
-      dockerfile: api/source/Dockerfile
+      context: ./api/source
     ports:
       - "127.0.0.1:8000:8000"
     environment:
@@ -21,8 +20,7 @@ services:
   target-api:
     profiles: [target]
     build:
-      context: .
-      dockerfile: api/target/Dockerfile
+      context: ./api/target
     ports:
       - "127.0.0.1:8001:8001"
     environment:

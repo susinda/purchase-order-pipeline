@@ -1,4 +1,12 @@
 import os
+from pathlib import Path
+
+import pymysql
+from pymysql.constants import ER
+
+
+SCHEMA = Path(__file__).with_name("schema.sql")
+CHECK_SCHEMA = "SELECT 1 FROM purchase_orders LIMIT 1"
 
 
 def connection_options() -> dict:
@@ -18,3 +26,16 @@ def connection_options() -> dict:
         "read_timeout": 5,
         "write_timeout": 5,
     }
+
+
+def initialize_schema(options: dict, *, check_existing: bool = True) -> None:
+    with pymysql.connect(**options) as connection, connection.cursor() as cursor:
+        if check_existing:
+            try:
+                cursor.execute(CHECK_SCHEMA)
+            except pymysql.ProgrammingError as error:
+                if not error.args or error.args[0] != ER.NO_SUCH_TABLE:
+                    raise
+            else:
+                return
+        cursor.execute(SCHEMA.read_text(encoding="utf-8"))

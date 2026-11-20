@@ -15,7 +15,7 @@ curl --user 'your-source-username' 'http://127.0.0.1:8000/purchase-orders?load_t
 curl --user 'your-source-username' 'http://127.0.0.1:8000/purchase-orders?load_type=incremental'
 ```
 
-The API returns the full JSON envelopes from `requirements_docs/sample_data/`, with 100 initial records and 20 incremental records. The `load_type` parameter is required and accepts `initial` or `incremental`. Use `docker compose down` to stop the service.
+The API returns the full JSON envelopes bundled in `api/source/sample_data/`, with 100 initial records and 20 incremental records. The `load_type` parameter is required and accepts `initial` or `incremental`. Use `docker compose down` to stop the service.
 
 To run with Python 3.12 from the repository root:
 
@@ -38,28 +38,29 @@ docker compose --profile target up --build -d target-api
 curl http://127.0.0.1:8001/health
 ```
 
-`PUT /purchase-orders/{order_number}` accepts one JSON order. Its `OrderNumber` must match the URL. Supply the Basic Auth username when prompted for the password by curl.
+`POST /purchase-orders` accepts one JSON order and uses its `OrderNumber` as the lookup key. Pass the Basic Auth username to curl and enter the password when prompted.
 
 ```bash
 curl -i --user 'your-target-username' \
-  -X PUT http://127.0.0.1:8001/purchase-orders/PO1040078 \
+  -X POST http://127.0.0.1:8001/purchase-orders \
   -H 'Content-Type: application/json' \
   -d '{"OrderNumber":"PO1040078","OrderStatus":"Open","OrderLines":[]}'
 ```
 
 | HTTP status | Result |
 |---|---|
-| `201 Created` | `inserted` |
-| `200 OK` | `updated` if the snapshot changed, or `duplicate` if it already matched |
+| `200 OK` | `inserted` for a new order, `updated` for a changed snapshot, or `duplicate` for an identical snapshot |
 | `401 Unauthorized` | Missing or invalid Basic Auth credentials |
-| `422 Unprocessable Content` | Invalid order or mismatched `OrderNumber` |
+| `422 Unprocessable Content` | Invalid order or missing or invalid `OrderNumber` |
 | `500 Internal Server Error` / `503 Service Unavailable` | Database operation failed or the database is unavailable |
 
 MySQL stores one complete snapshot per order number, including all nested rows. Duplicate detection compares the whole current JSON document. Object field order is ignored, and arrays are compared in order. A changed snapshot replaces the previous one. Version ordering and replay of older events remain part of the Kafka delivery work.
 
 ### Initialize an external MySQL database
 
-Run this once from a machine that can reach the existing database, before deploying the Target API. Use a setup account with `CREATE` permission on the database. Give the Target API runtime account `SELECT`, `INSERT`, and `UPDATE` on `purchase_orders`.
+Create the database before starting the Target API. At startup, the API checks for `purchase_orders` and applies [schema.sql](api/target/schema.sql) if the table is missing. The runtime account needs `SELECT`, `INSERT`, and `UPDATE` on `purchase_orders`, plus `CREATE` for automatic setup of a missing table.
+
+If the runtime account lacks `CREATE`, run the following once from a machine that can reach MySQL. Use a setup account with `CREATE` permission on the database.
 
 ```bash
 source .venv/bin/activate
@@ -75,7 +76,7 @@ python -m pip install -r api/target/requirements.txt
 )
 ```
 
-The command applies [schema.sql](api/target/schema.sql), which creates `purchase_orders` if it is missing and preserves existing rows. The local MySQL Compose service already applies the same file when it first initializes its volume. Keep cloud initialization as a separate provisioning step. If the schema evolves, run versioned migrations before deployment from an environment with database access.
+Both startup and the initializer preserve existing rows. The local MySQL Compose service also applies the same schema file when it first initializes its volume. If the schema evolves, run versioned migrations before deployment from an environment with database access.
 
 ## API authentication and Swagger
 
@@ -333,7 +334,7 @@ Keep measures at their natural grain. Joining coding rows and receipts directly 
 | Kafka payload | One complete order per event, keyed by order number. | Preserves order boundaries and supports partition affinity and replay. | Batch-level metadata must be tracked separately. |
 | Batch orchestration | Three logical Airflow DAGs: extract/publish, Target delivery, warehouse ingestion/dbt. | Keeps source and destination responsibilities distinct. | Requires explicit cross-DAG batch completion and prevents unsafe overlapping runs. |
 | Incremental semantics | Latest complete snapshot replaces current header and child state. | Matches the stated meaning of incremental records and handles child removals. | Requires timestamp normalization, deterministic ties and atomic reconciliation. |
-| Target API | Basic Auth and MySQL-backed `PUT /purchase-orders/{order_number}` with full-snapshot duplicate detection. | A retry of the current snapshot returns success without changing the stored order. | Version-aware replay still needs a `LastUpdated` comparison and deterministic tie-break. |
+| Target API | Basic Auth and MySQL-backed `POST /purchase-orders` with full-snapshot duplicate detection. | A retry of the current snapshot returns success without changing the stored order. | Version-aware replay still needs a `LastUpdated` comparison and deterministic tie-break. |
 | Warehouse model | Ingestion maintains the four relational tables; dbt builds analytics on top. | Follows the requirement that dbt's dimensional model sits on the four tables. | Transformation logic is split between ingestion SQL/code and dbt. |
 | Optional work | Kubernetes and OpenTelemetry after required acceptance tests pass. | Protects the timebox and cloud budget. | Bonus work may be omitted if it puts correctness or delivery at risk. |
 
@@ -352,7 +353,7 @@ Check items as they are completed. The checklist is a plan; unchecked items are 
 
 ### 2. Build and deploy the APIs
 
-- [x] Serve the existing fictional fixtures from `requirements_docs/sample_data/`.
+- [x] Serve the fictional fixtures bundled in `api/source/sample_data/`.
 - [x] Implement the deterministic Source API with explicit `initial` and `incremental` modes and response-count validation.
 - [x] Implement the Target API with persistent state, Basic Auth and full-snapshot duplicate detection.
 - [ ] Add processed-event idempotency and stale-version protection for Kafka delivery.
@@ -398,14 +399,14 @@ purchase-order-pipeline/
 ├── README.md
 ├── requirements_docs/
 │   ├── CANDIDATE_INSTRUCTIONS.pdf
-│   ├── ER_DIAGRAM.pdf
-│   └── sample_data/
-│       ├── purchased_order_initial.json
-│       └── purchased_order_incremental.json
+│   └── ER_DIAGRAM.pdf
 ├── api/
 │   ├── source/
-│   │   └── Dockerfile
+│   │   ├── .env.example
+│   │   ├── Dockerfile
+│   │   └── sample_data/
 │   └── target/
+│       ├── .env.example
 │       └── Dockerfile
 ├── integration/
 │   ├── event_contract.py
@@ -438,6 +439,7 @@ purchase-order-pipeline/
 
 See [Run the Source API](#run-the-source-api) and [Run the Target API](#run-the-target-api) for startup commands.
 
+- Copy [the Source API folder](api/source/) or [the Target API folder](api/target/) to build and run either service independently. Each folder includes a Dockerfile, an environment template, and startup instructions.
 - [`compose.yaml`](compose.yaml) builds the API images from the repository and can start a local MySQL database.
 - [`compose.coolify.yaml`](compose.coolify.yaml) pulls the two published images from GHCR and connects the Target API to the external MySQL database.
 
@@ -460,20 +462,14 @@ python -m unittest discover -s tests -v
 
 The Source API tests call the FastAPI app with the committed fixtures. The Target API and Kafka tests mock their external services. The single-message Kafka CLI and the batch Kafka producer have separate test files.
 
-Each API has its own Dockerfile and runs the full test suite during the image build. A failing test blocks either build. Use the repository root as the build context so Docker can access the shared auth module, tests, and fixtures.
+Each API builds from its own folder. GitHub Actions runs the repository test suite before building either image.
 
 ```bash
-docker build -f api/source/Dockerfile -t purchase-order-source .
-docker build -f api/target/Dockerfile -t purchase-order-target .
+docker build -t purchase-order-source api/source
+docker build -t purchase-order-target api/target
 ```
 
-Docker may reuse a successful test layer when its inputs are unchanged. To force a fresh test run and see the results in the Docker log, use Compose.
-
-```bash
-BUILDKIT_PROGRESS=plain docker compose --profile target build --no-cache source-api target-api
-```
-
-Use `.env.example` for variable names and placeholder values. Keep real credentials in local ignored `.env` files or cloud secret stores. Never commit Snowflake keys/passwords, Kafka certificates, API tokens, provider state files or real customer data.
+Use the root `.env.example` for repository Compose and Kafka CLI settings. Use each API's own `.env.example` for standalone deployment. Keep real credentials in local ignored `.env` files or cloud secret stores.
 
 ### Git and commits
 
@@ -491,16 +487,16 @@ The staging paths above are examples and become valid after those files exist. U
 
 ### CI and cloud deployment
 
-The [API workflow](.github/workflows/api-build.yml) builds both images. Each Dockerfile runs the unit test suite during the build, including API contract tests and mocked Kafka and MySQL operations.
+The [API workflow](.github/workflows/api-build.yml) runs the unit test suite first, including API contract tests and mocked Kafka and MySQL operations. It then builds each image from its service folder.
 
-Pull requests run the checks. A successful push to `main` or manual run from `main` publishes both tested images to GHCR with the commit SHA and `latest` tags. The workflow sets `IMAGE_TAG` in the Coolify Service to the commit SHA and triggers its deployment. Post-deployment API checks are currently disabled because Coolify deploys asynchronously.
+Pull requests run the checks. A successful push to `main` or manual run from `main` publishes both tested images to GHCR with the commit SHA and `latest` tags. The workflow sets `IMAGE_TAG` in the Coolify Service to the commit SHA and triggers its deployment. It then waits up to five minutes per API for `/health` to report that commit as healthy. The Target API health check also queries MySQL.
 
 With a Kafka broker configured in GitHub, the workflow checks that the topic is visible from the GitHub runner using the configured Kafka credentials. The Kafka check fetches metadata without producing or consuming messages. For a private broker or to check reachability from a producer or consumer host, run `python -m integration.kafka_check` there with the same Kafka environment as that client.
 
 #### One-time Coolify and GitHub setup
 
-1. In Coolify, use one **Docker Compose Empty** Service containing the contents of [compose.coolify.yaml](compose.coolify.yaml). Map the test source hostname to `source-api` on internal port `8000` and the test target hostname to `target-api` on internal port `8001`. Create the `IMAGE_TAG` variable. If GHCR packages are private, configure read access for the Coolify deployment server. [Coolify Compose Services](https://coolify.io/docs/services/configuration/docker-compose)
-2. Enter `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD`, `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, and the external MySQL settings as Coolify runtime variables. Run [the MySQL initializer](#initialize-an-external-mysql-database) before the first deployment.
+1. In Coolify, use one **Docker Compose Empty** Service containing the contents of [compose.coolify.yaml](compose.coolify.yaml). Map the test source hostname to `source-api` on internal port `8000` and the test target hostname to `target-api` on internal port `8001`. The workflow creates or updates `IMAGE_TAG` before deploying. If GHCR packages are private, configure read access for the Coolify deployment server. [Coolify Compose Services](https://coolify.io/docs/services/configuration/docker-compose)
+2. Enter `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD`, `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, and the external MySQL settings as Coolify runtime variables. If the runtime account lacks `CREATE` and the table is missing, run [the MySQL initializer](#initialize-an-external-mysql-database) before the first deployment.
 3. Create a `test` environment under **Settings → Environments** in GitHub. Add the environment variables and secrets there. Add `COOLIFY_AUTH_TOKEN` under **Settings → Secrets and variables → Actions → Repository secrets** or as a `test` environment secret.
 
    | Kind | Name | Value |

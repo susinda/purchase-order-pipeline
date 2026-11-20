@@ -8,7 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-SAMPLE_DATA = Path(__file__).resolve().parents[1] / "requirements_docs" / "sample_data"
+SAMPLE_DATA = Path(__file__).resolve().parents[1] / "api" / "source" / "sample_data"
 
 
 def request_json(url, *, order=None, credentials=None, image_tag=None):
@@ -17,7 +17,7 @@ def request_json(url, *, order=None, credentials=None, image_tag=None):
     if order is not None:
         data = json.dumps(order).encode("utf-8")
         headers["Content-Type"] = "application/json"
-    request = Request(url, data=data, headers=headers, method="PUT" if data else "GET")
+    request = Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
     if credentials:
         request.add_unredirected_header("Authorization", f"Basic {credentials}")
     try:
@@ -90,22 +90,22 @@ def check_source_extract(base_url, credentials, load_type):
 def check_target(base_url, credentials):
     order_number = "PO-CI"
     order = {"OrderNumber": order_number, "OrderLines": [{"LineNumber": "10", "Quantity": "1"}]}
-    url = f"{base_url}/purchase-orders/{order_number}"
+    url = f"{base_url}/purchase-orders"
     if request_json(url, order=order)[0] != 401:
         raise RuntimeError("Target API accepted a request without Basic Auth")
 
-    def submit(expected_status, result):
+    def submit(result):
         expect(
             request_json(url, order=order, credentials=credentials),
-            (expected_status, {"order_number": order_number, "status": result}),
+            (200, {"order_number": order_number, "status": result}),
             f"Target API {result} check",
         )
 
-    submit(201, "inserted")
-    submit(200, "duplicate")
+    submit("inserted")
+    submit("duplicate")
     order["OrderLines"][0]["Quantity"] = "2"
-    submit(200, "updated")
-    submit(200, "duplicate")
+    submit("updated")
+    submit("duplicate")
     print("Target API verified Basic Auth, insert, update and duplicate handling against MySQL")
 
 

@@ -5,13 +5,13 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 
 import pymysql
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.auth import create_api
-
-from .database import connection_options
+from .auth import create_api
+from .database import CHECK_SCHEMA, connection_options, initialize_schema
 
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ class DeliveryResult(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.mysql_options = connection_options()
+    await run_in_threadpool(initialize_schema, app.state.mysql_options)
     yield
 
 
@@ -65,27 +66,22 @@ async def mysql_error_handler(request: Request, error: pymysql.MySQLError) -> JS
 def health(request: Request, response: Response) -> dict[str, str]:
     with pymysql.connect(**request.app.state.mysql_options) as connection:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT 1 FROM purchase_orders LIMIT 1")
+            cursor.execute(CHECK_SCHEMA)
     if image_tag := os.environ.get("APP_IMAGE_TAG"):
         response.headers["X-Image-Tag"] = image_tag
     return {"status": "ok"}
 
 
-@protected.put(
-    "/purchase-orders/{order_number}",
+@protected.post(
+    "/purchase-orders",
     responses={
-        201: {"model": DeliveryResult, "description": "Purchase order inserted"},
+        200: {"description": "Purchase order inserted, updated, or already current"},
         401: {"description": "Basic authentication required"},
         500: {"description": "Database operation failed"},
         503: {"description": "Database unavailable"},
     },
 )
-def put_purchase_order(
-    order_number: str, order: PurchaseOrder, request: Request, response: Response
-) -> DeliveryResult:
-    if order_number != order.OrderNumber:
-        raise HTTPException(status_code=422, detail="OrderNumber must match the URL")
-
+def post_purchase_order(order: PurchaseOrder, request: Request) -> DeliveryResult:
     try:
         snapshot = json.dumps(order.model_dump(), allow_nan=False)
     except ValueError as error:
@@ -94,14 +90,13 @@ def put_purchase_order(
     with pymysql.connect(**request.app.state.mysql_options) as connection:
         with connection.cursor() as cursor:
             # MySQL reports 1 for inserted, 2 for changed, and 0 for unchanged.
-            affected_rows = cursor.execute(UPSERT_ORDER, (order_number, snapshot))
+            affected_rows = cursor.execute(UPSERT_ORDER, (order.OrderNumber, snapshot))
 
     if affected_rows == 1:
-        response.status_code = status.HTTP_201_CREATED
-        return DeliveryResult(order_number=order_number, status="inserted")
+        return DeliveryResult(order_number=order.OrderNumber, status="inserted")
     if affected_rows == 2:
-        return DeliveryResult(order_number=order_number, status="updated")
-    return DeliveryResult(order_number=order_number, status="duplicate")
+        return DeliveryResult(order_number=order.OrderNumber, status="updated")
+    return DeliveryResult(order_number=order.OrderNumber, status="duplicate")
 
 
 app.include_router(protected)

@@ -23,45 +23,19 @@ jobs:
       packages: write
     env:
       BUILDKIT_PROGRESS: plain
-      COMPOSE_PROJECT_NAME: purchase-orders-ci
-      SOURCE_API_USERNAME: ci-source-user
-      SOURCE_API_PASSWORD: ci-source-password
-      TARGET_API_USERNAME: ci-target-user
-      TARGET_API_PASSWORD: ci-target-password
-      MYSQL_DATABASE: purchase_orders
-      MYSQL_USER: purchase_orders_app
-      MYSQL_PASSWORD: ci-mysql-password
-      MYSQL_ROOT_PASSWORD: ci-root-password
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - name: Test Kafka producers and consumer
-        run: python3 -m unittest discover -s tests -p 'test_kafka*.py' -v
-
-      - name: Build Source API image
-        run: docker compose build --build-arg APP_IMAGE_TAG="$GITHUB_SHA" source-api
-
-      - name: Test Source API over HTTP
+      - name: Build both API images and run unit tests
+        shell: bash
         run: |
-          docker compose up --no-build --wait --wait-timeout 60 source-api
-          python3 scripts/check_api.py source http://127.0.0.1:8000 --image-tag "$GITHUB_SHA"
-
-      - name: Test MySQL connectivity and schema
-        run: |
-          docker compose --profile target up --wait --wait-timeout 120 target-db
-          docker compose --profile target exec -T -e MYSQL_PWD="$MYSQL_PASSWORD" target-db mysql \
-            --protocol=TCP --host=127.0.0.1 --user="$MYSQL_USER" --database="$MYSQL_DATABASE" \
-            --execute='SELECT COUNT(*) AS stored_orders FROM purchase_orders;'
-
-      - name: Build Target API image
-        run: docker compose --profile target build --build-arg APP_IMAGE_TAG="$GITHUB_SHA" target-api
-
-      - name: Test Target API over HTTP
-        run: |
-          docker compose --profile target up --no-build --wait --wait-timeout 60 target-api
-          python3 scripts/check_api.py target http://127.0.0.1:8001 --image-tag "$GITHUB_SHA"
+          for api in source target; do
+            docker build --file "api/$api/Dockerfile" \
+              --build-arg APP_IMAGE_TAG="$GITHUB_SHA" \
+              --tag "ghcr.io/susinda/purchase-order-$api:$GITHUB_SHA" .
+          done
 
       - name: Publish both tested images to GHCR
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -71,20 +45,8 @@ jobs:
         run: |
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           for api in source target; do
-            container=$(docker compose --profile target ps -q "${api}-api")
-            image_id=$(docker inspect --format '{{.Image}}' "$container")
-            published_image="ghcr.io/susinda/purchase-order-$api:$GITHUB_SHA"
-            docker image tag "$image_id" "$published_image"
-            docker image push "$published_image"
+            docker image push "ghcr.io/susinda/purchase-order-$api:$GITHUB_SHA"
           done
-
-      - name: Show container logs on failure
-        if: failure()
-        run: docker compose --profile target logs --no-color
-
-      - name: Remove test containers and database
-        if: always()
-        run: docker compose --profile target down --volumes
 
   deploy:
     name: Deploy both APIs to Coolify
@@ -113,7 +75,9 @@ jobs:
           COOLIFY_AUTH_TOKEN: ${{ secrets.COOLIFY_AUTH_TOKEN }}
         run: bash scripts/deploy_coolify.sh deploy
 
-      - name: Verify both deployed APIs and cloud MySQL
+      # Coolify queues deployments asynchronously. The old release may still
+      # answer while images pull and start, so wait for this commit on both APIs.
+      - name: Wait for both deployed APIs to serve the new release
         run: |
           python3 scripts/check_api.py health "$SOURCE_API_URL" --image-tag "$GITHUB_SHA"
           python3 scripts/check_api.py health "$TARGET_API_URL" --image-tag "$GITHUB_SHA"

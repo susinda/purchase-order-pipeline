@@ -49,7 +49,7 @@ def check_health(base_url, image_tag=None):
             last_failure = f"HTTP {status}"
             if status == 200 and image_tag:
                 last_failure += f" without a healthy response for image tag {image_tag}"
-        except (URLError, TimeoutError) as error:
+        except (URLError, ConnectionError, TimeoutError) as error:
             last_failure = str(error)
         if time.monotonic() >= deadline:
             raise RuntimeError(f"{base_url}/health did not become healthy: {last_failure}")

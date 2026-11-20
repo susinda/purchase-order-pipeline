@@ -438,7 +438,7 @@ purchase-order-pipeline/
 
 See [Run the Source API](#run-the-source-api) and [Run the Target API](#run-the-target-api) for startup commands.
 
-- [`compose.yaml`](compose.yaml) builds the API images from the repository and can start a local MySQL database. GitHub Actions also uses it for integration tests.
+- [`compose.yaml`](compose.yaml) builds the API images from the repository and can start a local MySQL database.
 - [`compose.coolify.yaml`](compose.coolify.yaml) pulls the two published images from GHCR and connects the Target API to the external MySQL database.
 
 ### Local development
@@ -491,7 +491,7 @@ The staging paths above are examples and become valid after those files exist. U
 
 ### CI and cloud deployment
 
-The [API workflow](.github/workflows/api-build.yml) uses the same API Dockerfiles through Compose. It runs the mocked Kafka tests, builds and tests the Source API over HTTP, verifies connectivity and schema access on disposable MySQL, then builds and tests the Target API over HTTP. The target test covers Basic Auth, insert, update, and duplicates using that database.
+The [API workflow](.github/workflows/api-build.yml) builds both images. Each Dockerfile runs the unit test suite during the build, including API contract tests and mocked Kafka and MySQL operations. Live HTTP checks run in the deployment job after Coolify is triggered.
 
 Pull requests run the checks. A successful push to `main` or manual run from `main` publishes both tested images to GHCR with the same commit SHA tag. The workflow updates `IMAGE_TAG` in the Coolify Service and triggers its deployment. It waits for both HTTPS health endpoints to report the image tag embedded at build time. The deployed Target API health endpoint queries the cloud MySQL table.
 

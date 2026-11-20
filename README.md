@@ -499,21 +499,21 @@ With Source API credentials configured in GitHub, the workflow makes one authent
 
 #### One-time Coolify and GitHub setup
 
-1. In Coolify, use one **Docker Compose Empty** Service containing the contents of [compose.coolify.yaml](compose.coolify.yaml). Map `https://source.praxams.com` to `source-api` on internal port `8000` and `https://target.praxams.com` to `target-api` on internal port `8001`. Create the `IMAGE_TAG` variable. If GHCR packages are private, configure read access for the Coolify deployment server. [Coolify Compose Services](https://coolify.io/docs/services/configuration/docker-compose)
+1. In Coolify, use one **Docker Compose Empty** Service containing the contents of [compose.coolify.yaml](compose.coolify.yaml). Map the test source hostname to `source-api` on internal port `8000` and the test target hostname to `target-api` on internal port `8001`. Create the `IMAGE_TAG` variable. If GHCR packages are private, configure read access for the Coolify deployment server. [Coolify Compose Services](https://coolify.io/docs/services/configuration/docker-compose)
 2. Enter `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD`, `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, and the external MySQL settings as Coolify runtime variables. Run [the MySQL initializer](#initialize-an-external-mysql-database) before the first deployment.
-3. Create a GitHub Actions environment named `production` for the deployment variables. Add the token under **Settings → Secrets and variables → Actions → Repository secrets**.
+3. Create a `test` environment under **Settings → Environments** in GitHub. Add the following variables and secrets to that environment.
 
    | Kind | Name | Value |
    |---|---|---|
    | Variable | `COOLIFY_API_URL` | Coolify API base URL, such as `https://coolify.example.com/api/v1` |
    | Variable | `COOLIFY_SERVICE_UUID` | UUID immediately after `/service/` in the Coolify page URL |
-   | Optional variable | `SOURCE_API_URL` | Defaults to `https://source.praxams.com` |
-   | Optional variable | `TARGET_API_URL` | Defaults to `https://target.praxams.com` |
-   | Repository secret | `COOLIFY_AUTH_TOKEN` | Coolify API token scoped to the Service with `write` and `deploy` permissions |
-   | Optional `production` secrets | `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD` | Set both to enable the authenticated Source API smoke check |
-   | Optional `production` variable | `KAFKA_BOOTSTRAP_SERVERS` | Set to enable the Kafka metadata check from GitHub Actions |
-   | Optional `production` variables | `KAFKA_TOPIC`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Default to `purchaseorders`, `SASL_SSL`, and `SCRAM-SHA-256` |
-   | `production` secrets for Kafka | `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, `KAFKA_CA_PEM` | Supply the SASL credentials for SASL connections and the CA certificate PEM when the broker needs a custom CA |
+   | Variable | `SOURCE_API_URL` | HTTPS base URL of the test Source API, such as `https://source-test.praxams.com` |
+   | Variable | `TARGET_API_URL` | HTTPS base URL of the test Target API, such as `https://target-test.praxams.com` |
+   | Secret | `COOLIFY_AUTH_TOKEN` | Coolify API token scoped to the Service with `write` and `deploy` permissions |
+   | Optional secrets | `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD` | Set both to enable the authenticated Source API smoke check |
+   | Optional variable | `KAFKA_BOOTSTRAP_SERVERS` | Set to enable the Kafka metadata check from GitHub Actions |
+   | Optional variables | `KAFKA_TOPIC`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Default to `purchaseorders`, `SASL_SSL`, and `SCRAM-SHA-256` |
+   | Kafka secrets | `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, `KAFKA_CA_PEM` | Supply the SASL credentials for SASL connections and the CA certificate PEM when the broker needs a custom CA |
 
 GitHub Actions uses its built-in token to publish the images. Cloud database credentials stay in Coolify. [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) · [Coolify API permissions](https://coolify.io/docs/api/permissions)
 

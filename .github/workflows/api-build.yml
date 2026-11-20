@@ -49,21 +49,26 @@ jobs:
           done
 
   deploy:
-    name: Deploy both APIs to Coolify
+    name: Deploy both APIs to Coolify test
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment: production
+    environment: test
     env:
       COOLIFY_API_URL: ${{ vars.COOLIFY_API_URL }}
       COOLIFY_SERVICE_UUID: ${{ vars.COOLIFY_SERVICE_UUID }}
-      SOURCE_API_URL: ${{ vars.SOURCE_API_URL || 'https://source.praxams.com' }}
-      TARGET_API_URL: ${{ vars.TARGET_API_URL || 'https://target.praxams.com' }}
+      SOURCE_API_URL: ${{ vars.SOURCE_API_URL }}
+      TARGET_API_URL: ${{ vars.TARGET_API_URL }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - name: Check test API URLs are configured
+        run: |
+          : "${SOURCE_API_URL:?Set SOURCE_API_URL in the test environment}"
+          : "${TARGET_API_URL:?Set TARGET_API_URL in the test environment}"
 
       - name: Update IMAGE_TAG in Coolify
         env:

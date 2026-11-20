@@ -491,17 +491,17 @@ The staging paths above are examples and become valid after those files exist. U
 
 ### CI and cloud deployment
 
-The [API workflow](.github/workflows/api-build.yml) builds both images. Each Dockerfile runs the unit test suite during the build, including API contract tests and mocked Kafka and MySQL operations. Live HTTP checks run in the deployment job after Coolify is triggered.
+The [API workflow](.github/workflows/api-build.yml) builds both images. Each Dockerfile runs the unit test suite during the build, including API contract tests and mocked Kafka and MySQL operations.
 
-Pull requests run the checks. A successful push to `main` or manual run from `main` publishes both tested images to GHCR with the same commit SHA tag. The workflow updates `IMAGE_TAG` in the Coolify Service and triggers its deployment. It waits for both HTTPS health endpoints to report the image tag embedded at build time. The deployed Target API health endpoint queries the cloud MySQL table.
+Pull requests run the checks. A successful push to `main` or manual run from `main` publishes both tested images to GHCR with the commit SHA and `latest` tags. The workflow sets `IMAGE_TAG` in the Coolify Service to the commit SHA and triggers its deployment. Post-deployment API checks are currently disabled because Coolify deploys asynchronously.
 
-With Source API credentials configured in GitHub, the workflow makes one authenticated HTTPS request for the incremental extract and checks it against the release fixture. With a Kafka broker configured in GitHub, it also checks that the topic is visible from the GitHub runner using the configured Kafka credentials. The Kafka check fetches metadata without producing or consuming messages. For a private broker or to check reachability from a producer or consumer host, run `python -m integration.kafka_check` there with the same Kafka environment as that client.
+With a Kafka broker configured in GitHub, the workflow checks that the topic is visible from the GitHub runner using the configured Kafka credentials. The Kafka check fetches metadata without producing or consuming messages. For a private broker or to check reachability from a producer or consumer host, run `python -m integration.kafka_check` there with the same Kafka environment as that client.
 
 #### One-time Coolify and GitHub setup
 
 1. In Coolify, use one **Docker Compose Empty** Service containing the contents of [compose.coolify.yaml](compose.coolify.yaml). Map the test source hostname to `source-api` on internal port `8000` and the test target hostname to `target-api` on internal port `8001`. Create the `IMAGE_TAG` variable. If GHCR packages are private, configure read access for the Coolify deployment server. [Coolify Compose Services](https://coolify.io/docs/services/configuration/docker-compose)
 2. Enter `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD`, `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, and the external MySQL settings as Coolify runtime variables. Run [the MySQL initializer](#initialize-an-external-mysql-database) before the first deployment.
-3. Create a `test` environment under **Settings → Environments** in GitHub. Add the following variables and secrets to that environment.
+3. Create a `test` environment under **Settings → Environments** in GitHub. Add the environment variables and secrets there. Add `COOLIFY_AUTH_TOKEN` under **Settings → Secrets and variables → Actions → Repository secrets** or as a `test` environment secret.
 
    | Kind | Name | Value |
    |---|---|---|
@@ -509,8 +509,9 @@ With Source API credentials configured in GitHub, the workflow makes one authent
    | Variable | `COOLIFY_SERVICE_UUID` | UUID immediately after `/service/` in the Coolify page URL |
    | Variable | `SOURCE_API_URL` | HTTPS base URL of the test Source API, such as `https://source-test.praxams.com` |
    | Variable | `TARGET_API_URL` | HTTPS base URL of the test Target API, such as `https://target-test.praxams.com` |
-   | Secret | `COOLIFY_AUTH_TOKEN` | Coolify API token scoped to the Service with `write` and `deploy` permissions |
-   | Optional secrets | `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD` | Set both to enable the authenticated Source API smoke check |
+   | Repository or environment secret | `COOLIFY_AUTH_TOKEN` | Coolify API token scoped to the Service with `write` and `deploy` permissions |
+   | Optional variable | `SOURCE_API_USERNAME` | Username for the authenticated Source API smoke check when re-enabled |
+   | Optional secret | `SOURCE_API_PASSWORD` | Password for the authenticated Source API smoke check when re-enabled |
    | Optional variable | `KAFKA_BOOTSTRAP_SERVERS` | Set to enable the Kafka metadata check from GitHub Actions |
    | Optional variables | `KAFKA_TOPIC`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Default to `purchaseorders`, `SASL_SSL`, and `SCRAM-SHA-256` |
    | Kafka secrets | `KAFKA_SASL_USERNAME`, `KAFKA_SASL_PASSWORD`, `KAFKA_CA_PEM` | Supply the SASL credentials for SASL connections and the CA certificate PEM when the broker needs a custom CA |

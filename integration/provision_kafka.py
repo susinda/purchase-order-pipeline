@@ -7,7 +7,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 
-from dags.po_pipeline.settings import PROPERTIES, application_properties, application_setting, required_setting
+from integration.po_pipeline.settings import PROPERTIES, application_properties, application_setting, required_setting
 
 
 API_BASE = "https://api.aiven.io/v1"

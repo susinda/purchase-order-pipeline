@@ -1,0 +1,57 @@
+version: 2
+models:
+  - name: stg_latest_order_event
+    columns:
+      - name: ORDER_NUMBER
+        data_tests: [not_null, unique]
+  - name: clean_purchase_order
+    columns:
+      - name: ORDER_NUMBER
+        data_tests: [not_null, unique]
+  - name: clean_purchase_order_line
+    columns:
+      - name: LINE_KEY
+        data_tests: [not_null, unique]
+      - name: ORDER_NUMBER
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('clean_purchase_order')
+                field: ORDER_NUMBER
+  - name: clean_purchase_order_line_coding_row
+    columns:
+      - name: CODING_KEY
+        data_tests: [not_null, unique]
+      - name: ORDER_NUMBER
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('clean_purchase_order')
+                field: ORDER_NUMBER
+  - name: clean_purchase_order_line_goods_receipt
+    columns:
+      - name: GOODS_RECEIPT_NUMBER
+        data_tests: [not_null, unique]
+      - name: ORDER_NUMBER
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('clean_purchase_order')
+                field: ORDER_NUMBER
+  - name: dim_supplier
+    columns:
+      - name: SUPPLIER_CODE
+        data_tests: [not_null, unique]
+  - name: dim_purchase_order
+    columns:
+      - name: ORDER_NUMBER
+        data_tests: [not_null, unique]
+  - name: fact_purchase_order_line
+    columns:
+      - name: LINE_KEY
+        data_tests: [not_null, unique]
+  - name: fact_goods_receipt
+    columns:
+      - name: GOODS_RECEIPT_NUMBER
+        data_tests: [not_null, unique]

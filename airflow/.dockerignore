@@ -2,3 +2,8 @@
 !Dockerfile
 !requirements.txt
 !packages.txt
+!include/
+!include/**
+!aiven_ca.pem
+**/__pycache__/
+**/*.pyc

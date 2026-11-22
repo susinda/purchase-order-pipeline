@@ -6,10 +6,10 @@ from unittest.mock import Mock, patch
 
 from kafka import TopicPartition
 
-from dags.po_pipeline.events import PermanentBatchError, build_batch, json_bytes
-from dags.po_pipeline.kafka_batch import consume_batch, publish_batch
-from dags.po_pipeline.kafka_config import connection_options, kafka_group_id, kafka_topic
-from dags.po_pipeline import warehouse
+from integration.po_pipeline.events import PermanentBatchError, build_batch, json_bytes
+from integration.po_pipeline.kafka_batch import consume_batch, publish_batch
+from integration.po_pipeline.kafka_config import connection_options, kafka_group_id, kafka_topic
+from integration.po_pipeline import warehouse
 
 
 SAMPLE_DATA = Path(__file__).resolve().parents[1] / "api" / "source" / "sample_data"
@@ -79,7 +79,7 @@ class BatchTest(unittest.TestCase):
         manifest, events = build_batch(data, "incremental", "run-one")
         self.assertEqual((manifest, events), build_batch(data, "incremental", "run-one"))
         self.assertNotEqual(manifest["batch_id"], build_batch(data, "incremental", "run-two")[0]["batch_id"])
-        with patch.dict("os.environ", env), patch("dags.po_pipeline.kafka_batch.fetch_extract", return_value=data), \
+        with patch.dict("os.environ", env), patch("integration.po_pipeline.kafka_batch.fetch_extract", return_value=data), \
              patch("kafka.KafkaProducer") as factory:
             broker = factory.return_value
             broker.send.return_value.get.side_effect = [
@@ -123,7 +123,7 @@ class BatchTest(unittest.TestCase):
             "CONSUMER_TEST_PASSWORD": "test-${password}",
             "KAFKA_BACKEND_SASL_USERNAME": "legacy-user",
         }
-        with patch("dags.po_pipeline.settings.application_properties", return_value=properties):
+        with patch("integration.po_pipeline.settings.application_properties", return_value=properties):
             self.assertEqual(kafka_topic(settings), "configured-topic")
             self.assertEqual(kafka_group_id(settings, "backend"), "configured-group")
             for role in ("backend", "analytics"):

@@ -2,7 +2,7 @@ import argparse
 import os
 from itertools import islice
 
-from dags.po_pipeline.settings import application_setting
+from integration.po_pipeline.settings import application_setting
 
 from .kafka_config import connection_options, kafka_group_id, kafka_topic
 

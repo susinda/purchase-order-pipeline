@@ -8,22 +8,25 @@ on:
         type: environment
         required: true
         default: test
-      deploy_runtime:
-        description: Build and deploy the Astro runtime with Kafka and Snowflake dependencies
-        type: boolean
-        default: false
+      component:
+        description: What to initialize (Snowflake is configured for test)
+        type: choice
+        default: all
+        options: [all, mysql-and-kafka, snowflake]
 
 permissions:
   contents: read
 
 concurrency:
-  group: astro-dag-deploy-${{ inputs.environment }}
+  group: initialize-environment-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   initialize:
+    name: Initialize MySQL and Aiven Kafka
+    if: inputs.component != 'snowflake'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v6
@@ -60,52 +63,55 @@ jobs:
           python -m integration.provision_kafka
           echo '[Aiven] Kafka provisioning is complete.'
 
-      - name: Check Astro runtime deployment inputs
-        if: inputs.deploy_runtime
-        env:
-          ASTRO_DEPLOYMENT_ID: ${{ vars.ASTRO_DEPLOYMENT_ID }}
-          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
-        run: |
-          : "${ASTRO_DEPLOYMENT_ID:?Set the ASTRO_DEPLOYMENT_ID variable in the selected GitHub environment}"
-          : "${ASTRO_API_TOKEN:?Set the ASTRO_API_TOKEN secret in the selected GitHub environment}"
-          if [[ ! -f airflow/.astro/config.yaml ]]; then
-            echo '::error::Missing airflow/.astro/config.yaml required by the Astro CLI.'
-            exit 1
-          fi
-          echo '[Astro] Ready to deploy the runtime image with Kafka and Snowflake dependencies.'
-
-      - name: Install Astro CLI
-        if: inputs.deploy_runtime
-        uses: astronomer/setup-astro-cli@v0.0.1
-        with:
-          version: '1.45.0'
-
-      - name: Deploy the Astro runtime image
-        if: inputs.deploy_runtime
-        uses: astronomer/deploy-action@v0.17.0
-        env:
-          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
-        with:
-          checkout: 'false'
-          deployment-id: ${{ vars.ASTRO_DEPLOYMENT_ID }}
-          deploy-type: image-only
-          root-folder: airflow
-          skip-unchanged: 'false'
-          wake-on-deploy: 'true'
-
-      - name: Report Astro runtime deployment
-        if: inputs.deploy_runtime
-        run: echo '[Astro] Runtime image deployment completed.'
-
-      - name: Report skipped Astro runtime deployment
-        if: ${{ !inputs.deploy_runtime }}
-        run: |
-          echo '[Astro] Runtime deployment skipped. Enable deploy_runtime if Kafka or Snowflake dependencies need to be installed.'
-
-      - name: Snowflake initialization status
-        run: |
-          echo '[Snowflake] Database, schema, and managed dbt project setup is handled separately for now.'
-          echo '[Snowflake] The analytics DAG creates the required tables and runs dbt after a complete batch.'
-
       - name: Report initialization result
         run: echo '[Init] MySQL and Aiven initialization completed successfully.'
+
+  initialize_snowflake:
+    name: Initialize Snowflake warehouse
+    if: inputs.component == 'snowflake' || (inputs.component == 'all' && inputs.environment == 'test')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: snowflake-project-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT || secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: GITHUB_CICD_USER
+      SNOWFLAKE_ROLE: PURCHASE_ORDER_PIPELINE_ROLE
+      SNOWFLAKE_WAREHOUSE: PO_WAREHOUSE
+      SNOWFLAKE_RAW_TABLE: ${{ vars.SNOWFLAKE_RAW_TABLE || 'PURCHASE_ORDER_DB.RAW.PURCHASE_ORDER_EVENTS' }}
+    steps:
+      - name: Validate Snowflake settings
+        shell: bash
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          if [[ "$TARGET_ENVIRONMENT" != test ]]; then
+            echo '::error::Select test. The Snowflake GitHub workload identity is configured for that environment.'
+            exit 1
+          fi
+          : "${SNOWFLAKE_ACCOUNT:?Set SNOWFLAKE_ACCOUNT in the GitHub test environment}"
+          if [[ ! "$SNOWFLAKE_RAW_TABLE" =~ ^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){2}$ ]]; then
+            echo '::error::SNOWFLAKE_RAW_TABLE must be DATABASE.SCHEMA.TABLE using unquoted identifiers.'
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install Snowflake CLI and obtain an OIDC token
+        uses: snowflakedb/snowflake-actions@v3
+        with:
+          use-oidc: true
+          cli-version: '3.16'
+
+      - name: Initialize the RAW, CLEAN, and BIZ objects
+        run: |
+          snow sql -x -f snowflake/init/initialize-warehouse.sql \
+            -D "raw_table=$SNOWFLAKE_RAW_TABLE" \
+            -D "database=${SNOWFLAKE_RAW_TABLE%%.*}"

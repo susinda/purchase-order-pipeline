@@ -1,4 +1,4 @@
-name: Deploy APIs and DAGs
+name: Deploy APIs, DAGs, and dbt
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ on:
         description: What to deploy
         type: choice
         default: both
-        options: [both, apis, dags]
+        options: [both, apis, runtime-and-dags, dbt]
 
 permissions:
   contents: read
@@ -26,7 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       apis: ${{ steps.changes.outputs.apis }}
-      dags: ${{ steps.changes.outputs.dags }}
+      astro: ${{ steps.changes.outputs.astro }}
+      dbt: ${{ steps.changes.outputs.dbt }}
     steps:
       - uses: actions/checkout@v6
         if: github.event_name == 'push'
@@ -42,7 +43,8 @@ jobs:
           COMPONENT: ${{ inputs.component }}
         run: |
           apis=false
-          dags=false
+          astro=false
+          dbt=false
           case "$GITHUB_EVENT_NAME" in
             pull_request)
               apis=true
@@ -51,8 +53,11 @@ jobs:
               if [[ "$COMPONENT" == both || "$COMPONENT" == apis ]]; then
                 apis=true
               fi
-              if [[ "$COMPONENT" == both || "$COMPONENT" == dags ]]; then
-                dags=true
+              if [[ "$COMPONENT" == both || "$COMPONENT" == runtime-and-dags ]]; then
+                astro=true
+              fi
+              if [[ "$COMPONENT" == dbt ]]; then
+                dbt=true
               fi
               ;;
             push)
@@ -60,16 +65,20 @@ jobs:
                 BEFORE_SHA=$(git hash-object -w -t tree --stdin < /dev/null)
               fi
               api_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- api/)
-              dag_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- dags/)
+              astro_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- airflow/)
+              dbt_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- snowflake/dbt/)
               if [[ -n "$api_changes" ]]; then
                 apis=true
               fi
-              if [[ -n "$dag_changes" ]]; then
-                dags=true
+              if [[ -n "$astro_changes" ]]; then
+                astro=true
+              fi
+              if [[ -n "$dbt_changes" ]]; then
+                dbt=true
               fi
               ;;
           esac
-          printf 'apis=%s\ndags=%s\n' "$apis" "$dags" >> "$GITHUB_OUTPUT"
+          printf 'apis=%s\nastro=%s\ndbt=%s\n' "$apis" "$astro" "$dbt" >> "$GITHUB_OUTPUT"
 
   build:
     name: Test and build both APIs
@@ -160,15 +169,15 @@ jobs:
               .deployments[] | select(.resource_uuid == $uuid) | .message |
               if startswith("Service ") then . else error("Coolify did not accept deployment: " + .) end'
 
-  deploy_dags:
-    name: Deploy DAGs to Astro
+  deploy_astro:
+    name: Deploy Astro runtime and DAGs
     needs: check_changes
-    if: needs.check_changes.outputs.dags == 'true'
+    if: needs.check_changes.outputs.astro == 'true'
     concurrency:
       group: astro-dag-deploy-test
       cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: test
     steps:
       - uses: actions/checkout@v6
@@ -177,40 +186,74 @@ jobs:
 
       - name: Check Astro deployment inputs
         env:
-          ASTRO_DEPLOYMENT_ID: ${{ vars.ASTRO_DEPLOYMENT_ID }}
-          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
+          ASTRO_DEPLOYMENT_ID: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
+          ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         run: |
-          : "${ASTRO_DEPLOYMENT_ID:?Set the ASTRO_DEPLOYMENT_ID variable in the test environment}"
-          : "${ASTRO_API_TOKEN:?Set the ASTRO_API_TOKEN secret in the test environment}"
-          if [[ ! -d dags ]]; then
-            echo '::error::Add the dags/ directory before deploying to Astro.'
-            exit 1
-          fi
+          : "${ASTRO2_DEPLOYMENT_ID:?Set the ASTRO_DEPLOYMENT_ID variable in the test environment}"
+          : "${ASTRO2_API_TOKEN:?Set the ASTRO2_API_TOKEN secret in the test environment}"
 
       - name: Install Astro CLI
         uses: astronomer/setup-astro-cli@v0.0.1
         with:
           version: '1.45.0'
 
-      - name: Deploy DAGs to Astro
+      - name: Deploy the Astro image and DAGs
         uses: astronomer/deploy-action@v0.17.0
         env:
-          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
+          ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         with:
           checkout: 'false'
-          deployment-id: ${{ vars.ASTRO_DEPLOYMENT_ID }}
-          deploy-type: dags-only
-          dags-path: dags
+          deployment-id: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
+          deploy-type: image-and-dags
+          root-folder: airflow
           no-dags-base-dir: 'true'
           skip-unchanged: 'false'
           wake-on-deploy: 'true'
 
+  deploy_dbt:
+    name: Publish dbt project to Snowflake
+    needs: check_changes
+    if: needs.check_changes.outputs.dbt == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: test
+    concurrency:
+      group: snowflake-project-test
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT || secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: GITHUB_CICD_USER
+      SNOWFLAKE_ROLE: PURCHASE_ORDER_PIPELINE_ROLE
+      SNOWFLAKE_WAREHOUSE: PO_WAREHOUSE
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check Snowflake account setting
+        run: |
+          : "${SNOWFLAKE_ACCOUNT:?Set SNOWFLAKE_ACCOUNT in the GitHub test environment}"
+
+      - name: Install Snowflake CLI and obtain an OIDC token
+        uses: snowflakedb/snowflake-actions@v3
+        with:
+          use-oidc: true
+          cli-version: '3.16'
+
+      - name: Publish transformation source files
+        run: |
+          snow dbt deploy PO_DBT_PROJECT --source snowflake/dbt \
+            --database PURCHASE_ORDER_DB --schema TRANSFORM --dbt-version 1.12.3 -x
+
   verify_services:
     name: Verify deployed services
-    needs: [deploy_apis, deploy_dags]
+    needs: [deploy_apis, deploy_astro]
     if: >-
-      !cancelled() && !failure() &&
-      (needs.deploy_apis.result == 'success' || needs.deploy_dags.result == 'success')
+      !cancelled() &&
+      (needs.deploy_apis.result == 'success' || needs.deploy_astro.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: test
@@ -219,12 +262,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Check API health, Kafka topic, and Airflow health
+      - name: Check the services deployed in this run
         shell: bash
         env:
           SOURCE_API_URL: ${{ vars.SOURCE_API_URL }}
           TARGET_API_URL: ${{ vars.TARGET_API_URL }}
-          EXPECTED_IMAGE_TAG: ${{ needs.deploy_apis.result == 'success' && github.sha || '' }}
+          VERIFY_APIS: ${{ needs.deploy_apis.result == 'success' }}
+          VERIFY_ASTRO: ${{ needs.deploy_astro.result == 'success' }}
+          EXPECTED_IMAGE_TAG: ${{ github.sha }}
           KAFKA_BOOTSTRAP_SERVERS: ${{ vars.KAFKA_BOOTSTRAP_SERVERS }}
           KAFKA_TOPIC: ${{ vars.KAFKA_TOPIC }}
           KAFKA_SECURITY_PROTOCOL: ${{ vars.KAFKA_SECURITY_PROTOCOL }}
@@ -233,7 +278,7 @@ jobs:
           KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD || secrets.KAFKA_PRODUCER_SASL_PASSWORD }}
           KAFKA_CA_PEM: ${{ secrets.KAFKA_CA_PEM }}
           AIRFLOW_BASE_URL: ${{ vars.AIRFLOW_BASE_URL }}
-          ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
+          ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         run: |
           failed=0
           check() {
@@ -252,7 +297,7 @@ jobs:
               echo "Set $setting in the test environment."
               return 1
             fi
-            python3 scripts/check_api.py health "$url" --image-tag "$EXPECTED_IMAGE_TAG"
+            python3 tests/check_api.py health "$url" --image-tag "$EXPECTED_IMAGE_TAG"
           }
 
           check_kafka() {
@@ -268,7 +313,7 @@ jobs:
 
           check_airflow() {
             if [[ -z "$AIRFLOW_BASE_URL" || -z "$ASTRO_API_TOKEN" ]]; then
-              echo 'Set AIRFLOW_BASE_URL and ASTRO_API_TOKEN in the test environment.'
+              echo 'Set AIRFLOW_BASE_URL and ASTRO2_API_TOKEN in the test environment.'
               return 1
             fi
             curl -fsS --proto '=https' --max-time 10 --retry 2 --retry-max-time 25 \
@@ -278,8 +323,12 @@ jobs:
               jq -se 'length == 1 and (.[0] | .metadatabase.status == "healthy" and .scheduler.status == "healthy")'
           }
 
-          check 'Source API' check_api "$SOURCE_API_URL" SOURCE_API_URL
-          check 'Target API' check_api "$TARGET_API_URL" TARGET_API_URL
-          check 'Kafka topic' check_kafka
-          check 'Airflow' check_airflow
+          if [[ "$VERIFY_APIS" == true ]]; then
+            check 'Source API' check_api "$SOURCE_API_URL" SOURCE_API_URL
+            check 'Target API' check_api "$TARGET_API_URL" TARGET_API_URL
+          fi
+          if [[ "$VERIFY_ASTRO" == true ]]; then
+            check 'Kafka topic' check_kafka
+            check 'Airflow' check_airflow
+          fi
           exit "$failed"

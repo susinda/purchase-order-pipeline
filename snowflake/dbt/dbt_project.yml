@@ -1,0 +1,17 @@
+name: 'po_dbt_project'
+version: '1.0.0'
+config-version: 2
+profile: 'po_snowflake'
+model-paths: ['models']
+macro-paths: ['macros']
+models:
+  po_dbt_project:
+    staging:
+      +materialized: view
+      +schema: CLEAN
+    clean:
+      +materialized: warehouse_table
+      +schema: CLEAN
+    biz:
+      +materialized: warehouse_table
+      +schema: BIZ

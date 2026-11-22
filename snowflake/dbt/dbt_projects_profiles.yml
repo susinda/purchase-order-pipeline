@@ -1,0 +1,11 @@
+po_snowflake:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      # Snowflake-managed Workspaces uses its current login context.
+      database: PURCHASE_ORDER_DB
+      warehouse: PO_WAREHOUSE
+      role: PURCHASE_ORDER_PIPELINE_ROLE
+      schema: TRANSFORM
+      threads: 4

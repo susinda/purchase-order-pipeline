@@ -3,10 +3,10 @@ import hashlib
 import os
 from urllib.request import urlopen
 
-from dags.po_pipeline.events import (
+from integration.po_pipeline.events import (
     ACK_TIMEOUT_SECONDS, LOAD_TYPES, fetch_extract as fetch_source_extract, json_bytes, validate_extract,
 )
-from dags.po_pipeline.settings import api_credentials, application_setting
+from integration.po_pipeline.settings import api_credentials, application_setting
 
 from .kafka_config import connection_options, kafka_topic
 

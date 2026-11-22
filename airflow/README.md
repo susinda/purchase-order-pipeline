@@ -7,7 +7,7 @@ One Astro deployment publishes the image and the `airflow/dags/` bundle together
 ## Set up the deployment
 
 1. Enable DAG-only deploys on the Astro deployment. In the GitHub `test`
-   environment, set `ASTRO_DEPLOYMENT_ID` as a variable and `ASTRO2_API_TOKEN`
+   environment, set `ASTRO2_DEPLOYMENT_ID` as a variable and `ASTRO2_API_TOKEN`
    as a secret.
 2. Use [Initialize environment](../.github/workflows/initialize-environment.yml)
    with `mysql-and-kafka` to create the Target API's MySQL tables and provision

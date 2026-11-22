@@ -530,7 +530,7 @@ Configure these additional settings in the GitHub `test` environment for the ver
 
 | Kind | Name | Value |
 |---|---|---|
-| Variable | `AIRFLOW_BASE_URL` | Astro Airflow deployment URL, including any deployment path and omitting `/api/v2` |
+| Variable | `AIRFLOW_BASE_URL` | Airflow URL for `ASTRO2_DEPLOYMENT_ID`, including any deployment path and omitting `/api/v2` |
 | Secret | `ASTRO2_API_TOKEN` | Existing Astro token with access to the deployment's Airflow REST API |
 | Variable | `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address reachable from the GitHub runner |
 | Secret | `KAFKA_SASL_PASSWORD` | SASL password for the Kafka user. The workflow also accepts `KAFKA_PRODUCER_SASL_PASSWORD`. |
@@ -555,7 +555,7 @@ GitHub Actions uses its built-in token to publish the images. Cloud database cre
 
 #### Deploy Airflow DAGs to Astro
 
-In the GitHub `test` environment, set `ASTRO_DEPLOYMENT_ID` as a variable and `ASTRO2_API_TOKEN` as a secret. Use a token with access to the target Astro Deployment and enable DAG-only deploys there. [Astronomer GitHub Actions setup](https://www.astronomer.io/docs/astro/ci-cd-templates/default-deploy-action/)
+In the GitHub `test` environment, set `ASTRO2_DEPLOYMENT_ID` as a variable and `ASTRO2_API_TOKEN` as a secret. Use a token with access to the target Astro Deployment and enable DAG-only deploys there. [Astronomer GitHub Actions setup](https://www.astronomer.io/docs/astro/ci-cd-templates/default-deploy-action/)
 
 [Deploy APIs, DAGs, and dbt](.github/workflows/deploy-apis-dags-dbt.yml) routes pushes to `main` by folder. A push that touches multiple deployment folders runs each matching job.
 

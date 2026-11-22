@@ -180,16 +180,17 @@ jobs:
     timeout-minutes: 45
     environment: test
     steps:
+    env:
+      ASTRO2_DEPLOYMENT_ID: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
       - name: Check Astro deployment inputs
         env:
-          ASTRO_DEPLOYMENT_ID: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
-          ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
+          ASTRO2_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         run: |
-          : "${ASTRO2_DEPLOYMENT_ID:?Set the ASTRO_DEPLOYMENT_ID variable in the test environment}"
+          : "${ASTRO2_DEPLOYMENT_ID:?Set the ASTRO2_DEPLOYMENT_ID variable in the test environment}"
           : "${ASTRO2_API_TOKEN:?Set the ASTRO2_API_TOKEN secret in the test environment}"
 
       - name: Install Astro CLI
@@ -203,7 +204,7 @@ jobs:
           ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         with:
           checkout: 'false'
-          deployment-id: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
+          deployment-id: ${{ env.ASTRO2_DEPLOYMENT_ID }}
           deploy-type: image-and-dags
           root-folder: airflow
           no-dags-base-dir: 'true'
@@ -278,7 +279,7 @@ jobs:
           KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD || secrets.KAFKA_PRODUCER_SASL_PASSWORD }}
           KAFKA_CA_PEM: ${{ secrets.KAFKA_CA_PEM }}
           AIRFLOW_BASE_URL: ${{ vars.AIRFLOW_BASE_URL }}
-          ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
+          ASTRO2_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         run: |
           failed=0
           check() {
@@ -312,12 +313,12 @@ jobs:
           }
 
           check_airflow() {
-            if [[ -z "$AIRFLOW_BASE_URL" || -z "$ASTRO_API_TOKEN" ]]; then
+            if [[ -z "$AIRFLOW_BASE_URL" || -z "$ASTRO2_API_TOKEN" ]]; then
               echo 'Set AIRFLOW_BASE_URL and ASTRO2_API_TOKEN in the test environment.'
               return 1
             fi
             curl -fsS --proto '=https' --max-time 10 --retry 2 --retry-max-time 25 \
-              -H "Authorization: Bearer $ASTRO_API_TOKEN" \
+              -H "Authorization: Bearer $ASTRO2_API_TOKEN" \
               -H 'Accept: application/json' \
               "${AIRFLOW_BASE_URL%/}/api/v2/monitor/health" |
               jq -se 'length == 1 and (.[0] | .metadatabase.status == "healthy" and .scheduler.status == "healthy")'

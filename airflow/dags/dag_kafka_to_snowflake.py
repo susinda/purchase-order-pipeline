@@ -275,9 +275,9 @@ with DAG(
                     }
                     LOG.warning("Invalid JSON partition=%d offset=%d: %s", partition, offset, exc)
 
-                LOG.info("READ %d/%d order=%s event=%s partition=%d offset=%d",
+                LOG.info("READ %d/%d order=%s batch_id=%s event_id=%s partition=%d offset=%d",
                          processed + 1, max_messages, event.get("order_number"),
-                         event.get("event_id"), partition, offset)
+                         event.get("batch_id"), event.get("event_id"), partition, offset)
                 reason = validate_event(event)
                 if reason:
                     # First persist+commit preceding valid records. Never commit

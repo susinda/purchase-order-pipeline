@@ -192,8 +192,8 @@ with DAG(
                         LOG.warning("Malformed Kafka JSON partition=%d offset=%d: %s",
                                     partition, offset, error)
 
-                    LOG.info("READ order=%s event=%s partition=%d offset=%d",
-                             event.get("order_number"), event.get("event_id"),
+                    LOG.info("READ order=%s batch_id=%s event_id=%s partition=%d offset=%d",
+                             event.get("order_number"), event.get("batch_id"), event.get("event_id"),
                              partition, offset)
                     reason = check_order(event)
                     if reason:

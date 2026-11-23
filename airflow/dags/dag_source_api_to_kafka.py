@@ -89,8 +89,8 @@ with DAG(
         acknowledged = [0]
         errors = []
         orders = extract["orders"]
-        LOG.info("[2/2] Publish %d purchase-order events to Kafka topic=%s batch=%s",
-                 len(orders), topic, batch_id)
+        LOG.info("[2/2] Publish %d purchase-order events to Kafka topic=%s run_id=%s batch_id=%s",
+                 len(orders), topic, run_id, batch_id)
 
         def receipt(error, message):
             if error:
@@ -98,13 +98,13 @@ with DAG(
                 LOG.error("Kafka delivery rejected: %s", error)
             else:
                 acknowledged[0] += 1
-                LOG.info("ACK topic=%s partition=%d offset=%d", message.topic(),
-                         message.partition(), message.offset())
+                LOG.info("ACK topic=%s batch_id=%s partition=%d offset=%d", message.topic(),
+                         batch_id, message.partition(), message.offset())
 
         for index, order in enumerate(orders, 1):
-            # Hash of full document and last-updated distinguishes changed versions of the same order.
+            # The batch ID distinguishes separate runs. Identical snapshots in a retry keep their IDs.
             content = json.dumps(order, sort_keys=True, separators=(",", ":"))
-            event_id = hashlib.sha256(content.encode()).hexdigest()
+            event_id = hashlib.sha256(f"{batch_id}:{content}".encode()).hexdigest()
             event = {
                 "event_id": event_id,
                 "batch_id": batch_id,
@@ -113,8 +113,8 @@ with DAG(
                 "last_updated": order.get("LastUpdated"),
                 "payload": order,
             }
-            LOG.info("Queue order %d/%d OrderNumber=%s event_id=%.12s", index,
-                     len(orders), order["OrderNumber"], event_id)
+            LOG.info("Queue order %d/%d OrderNumber=%s batch_id=%s event_id=%s", index,
+                     len(orders), order["OrderNumber"], batch_id, event_id)
             producer.produce(topic, key=str(order["OrderNumber"]).encode(),
                              value=json.dumps(event, separators=(",", ":")).encode(),
                              callback=receipt)

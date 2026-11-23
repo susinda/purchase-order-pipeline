@@ -73,6 +73,14 @@ incremental run.
 
 ## Delivery and recovery
 
+The source DAG derives a `batch_id` from its Airflow run ID and hashes that
+batch ID with each order snapshot to generate `event_id`. Kafka carries both
+IDs, the consumer logs include them, and Snowflake stores them in RAW.
+Use `batch_id` to trace a source run and `event_id` to trace an individual
+snapshot. Retries of the same run keep the same event IDs for unchanged
+snapshots. Two separate initial runs add 200 rows to empty RAW after both
+batches are consumed. CLEAN still uses the latest snapshot for each order.
+
 Each consumer starts from its group's committed offsets. A new group reads
 retained records from the beginning. Each run stops at its message limit or
 after its idle timeout. The Target and Snowflake limits default to 100 messages

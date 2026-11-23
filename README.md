@@ -114,7 +114,7 @@ test -f .env || (umask 077 && cp .env.example .env)
 
 Fill in `.env` with the settings above. Quote values containing shell special characters. Git ignores `.env` and `integration/aiven_ca.pem`.
 
-[application.properties](integration/po_pipeline/application.properties) lists provisioning settings first and solution runtime settings second. A value written as `${ENV_VAR}` is resolved from the process environment when the command uses that setting. Export your local `.env` before running commands. GitHub Actions supplies provisioning and verification settings. Configure the DAG runtime separately in [Astro](airflow/README.md#set-up-the-deployment).
+[application.properties](integration/po_pipeline/application.properties) defines the provisioning settings and defaults for the Kafka command-line tools. A value written as `${ENV_VAR}` is resolved from the process environment when the command uses that setting. Export your local `.env` before running commands. GitHub Actions supplies provisioning and verification settings. Configure the DAG runtime separately in [Astro](airflow/README.md#set-up-the-deployment).
 
 ```bash
 set -a
@@ -137,7 +137,7 @@ Set the Kafka names and topic creation settings in [application.properties](inte
 
 Run **Actions → Initialize environment → Run workflow** and choose the GitHub environment. Select `mysql-and-kafka` to initialize MySQL and provision Aiven. The default `all` also initializes Snowflake when the environment is `test`. If MySQL is private, the runner needs a network route to it. [Manual workflow runs](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 
-Use `snowflake` in [Initialize environment](.github/workflows/initialize-environment.yml) to create the RAW table, four CLEAN tables, and BIZ tables and views in `test` independently. Then publish the dbt project using the `dbt` option in [Deploy APIs, DAGs, and dbt](.github/workflows/deploy-apis-dags-dbt.yml). See [Snowflake and dbt ownership](airflow/README.md#snowflake-and-dbt-ownership) for prerequisites and Power BI access.
+Use `snowflake` in [Initialize environment](.github/workflows/initialize-environment.yml) to create the RAW table, four CLEAN tables, and BIZ tables and views in `test` independently. Then publish the dbt project using the `dbts` option in [Deploy APIs, DAGs, and dbt](.github/workflows/deploy-apis-dags-dbt.yml). See [Snowflake and dbt ownership](airflow/README.md#snowflake-and-dbt-ownership) for prerequisites and Power BI access.
 
 Retrieve the Kafka users' generated passwords from Aiven and configure them in [Astro](airflow/README.md#set-up-the-deployment). The workflow keeps passwords out of GitHub logs and artifacts. The Astro deployment and Snowflake schemas and managed dbt project are configured separately. [Aiven service users](https://aiven.io/docs/products/kafka/howto/add-manage-service-users)
 
@@ -350,7 +350,7 @@ Keep measures at their natural grain. Joining coding rows and receipts directly 
 | Processing style | Manually triggered, finite Airflow batches. | The initial and incremental fixtures can be replayed independently. | Add a schedule when the real source frequency is known. |
 | API placement | Source and target FastAPI services deployed on the user's Coolify cloud instance. | Cloud Airflow cannot reliably reach a laptop-local service; the laptop is resource-constrained. | Revisit if networking, availability or isolation requirements outgrow this host. |
 | Kafka and Airflow | Aiven for development Kafka and Astro for hosted Airflow. | Keeps the laptop free of the heavyweight runtime and enables cloud-to-cloud connectivity. | Confirm Astro tasks can reach Kafka, Snowflake and the Coolify APIs. |
-| Fan-out and recovery | One canonical topic, separate destination consumer groups, bounded Airflow retries and manifest-based replay. | Each destination processes the same batch independently and preserves unrelated Kafka offsets. | Retry topics and dead-letter routing can be added later if operators need automated recovery. |
+| Fan-out and recovery | One canonical topic, independent destination consumer groups, bounded Airflow retries, and dead-letter topics. | Each destination can resume from its own committed Kafka offsets. | Operators inspect and replay quarantined records from the relevant dead-letter topic. |
 | Kafka payload | One complete order per event, keyed by order number. | Preserves order boundaries and supports partition affinity and replay. | Batch-level metadata must be tracked separately. |
 | Batch orchestration | Three logical Airflow DAGs: extract/publish, Target delivery, warehouse ingestion/dbt. | Keeps source and destination responsibilities distinct. | Requires explicit cross-DAG batch completion and prevents unsafe overlapping runs. |
 | Incremental semantics | Latest complete snapshot replaces current header and child state. | Matches the stated meaning of incremental records and handles child removals. | Requires timestamp normalization, deterministic ties and atomic reconciliation. |
@@ -447,10 +447,13 @@ purchase-order-pipeline/
 │       └── dag_test_connections.py
 ├── snowflake/
 │   ├── init/
-│   │   ├── initialize-warehouse.sql
+│   │   ├── initialize-raw.sql
+│   │   ├── grant-pipeline-access.sql
 │   │   └── grant-bi-view-access.sql
 │   └── dbt/
 │       ├── dbt_project.yml
+│       ├── ddl/
+│       │   └── warehouse.sql
 │       ├── macros/
 │       └── models/
 │           ├── staging/
@@ -522,7 +525,7 @@ See [Snowflake workload identity setup for GitHub Actions](docs/snowflake-github
 
 The API build in [Deploy APIs, DAGs, and dbt](.github/workflows/deploy-apis-dags-dbt.yml) runs the unit test suite first, including API contract tests and mocked Kafka and MySQL operations. It then builds each image from its service folder.
 
-Pull requests run the checks. Pushes to `main` build and deploy the APIs only when files under `api/` change. A manual run from `main` can also deploy them by selecting `apis` or `both`. The workflow publishes both tested images to GHCR with the commit SHA and `latest` tags, sets `IMAGE_TAG` in the Coolify service to the commit SHA, and triggers deployment.
+Pull requests run the checks. Pushes to `main` build and deploy the APIs only when files under `api/` change. A manual run from `main` can also deploy them by selecting `apis`. The workflow publishes both tested images to GHCR with the commit SHA and `latest` tags, sets `IMAGE_TAG` in the Coolify service to the commit SHA, and triggers deployment.
 
 After a successful API deployment, the verification job checks both `/health` endpoints and waits up to five minutes per endpoint for the new commit SHA. The Target API health check also queries MySQL. After a successful Astro deployment, the job checks Kafka topic metadata and Airflow's scheduler and metadata database health. The Kafka check runs from the GitHub runner without producing or consuming messages. You can also run `python -m integration.kafka_check` from a producer or consumer host.
 
@@ -563,10 +566,10 @@ In the GitHub `test` environment, set `ASTRO2_DEPLOYMENT_ID` as a variable and `
 |---|---|
 | `api/` | Build both API images and deploy their Coolify service |
 | `airflow/` | Deploy the Astro runtime image and DAG bundle together |
-| `snowflake/dbt/` | Publish transformation changes to the Snowflake-managed dbt project |
-| `snowflake/init/` | Apply warehouse DDL with `test` and `snowflake` in [Initialize environment](.github/workflows/initialize-environment.yml). An administrator runs the BI grants script. |
+| `snowflake/dbt/` except `ddl/` | Publish transformation changes to the Snowflake-managed dbt project |
+| `snowflake/init/` and `snowflake/dbt/ddl/` | Apply warehouse DDL with `test` and `snowflake` in [Initialize environment](.github/workflows/initialize-environment.yml). An administrator runs the grants scripts. |
 
-Manually select `runtime-and-dags` to deploy Astro, `both` to deploy the APIs and Astro, or `dbt` to publish the Snowflake project. Follow [the Astro runbook](airflow/README.md) for configuration, triggering a batch, and recovery. [Astronomer deploy action](https://github.com/astronomer/deploy-action)
+For a manual run, choose `apis` for Coolify, `dags` for the Astro image and DAG bundle, or `dbts` for the Snowflake dbt project. Follow [the Astro runbook](airflow/README.md) for configuration, triggering a batch, and recovery. [Astronomer deploy action](https://github.com/astronomer/deploy-action)
 
 Configure the Airflow connections for Kafka, Snowflake and the Coolify APIs in Astro. Configure the Snowflake-managed dbt project and verify Kafka delivery to both destinations, Snowflake row counts, and dbt completion over a full run.
 

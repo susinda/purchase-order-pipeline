@@ -17,7 +17,7 @@ One Astro deployment publishes the image and the `airflow/dags/` bundle together
    Initialize the warehouse and publish dbt before the first Snowflake
    ingestion run. See [Snowflake and dbt ownership](#snowflake-and-dbt-ownership).
 4. Run [Deploy APIs, DAGs, and dbt](../.github/workflows/deploy-apis-dags-dbt.yml)
-   with **runtime-and-dags** to deploy the Astro image and DAG bundle together.
+   with **dags** to deploy the Astro image and DAG bundle together.
    Pushes to `main` also trigger that combined deployment when a file under
    `airflow/` changes. [Astronomer deploy action](https://github.com/astronomer/deploy-action)
 
@@ -100,25 +100,28 @@ set the GitHub variable `SNOWFLAKE_RAW_TABLE` to the same fully qualified name.
 The Airflow DAG passes that RAW location to dbt when it starts a build.
 
 1. Create `PURCHASE_ORDER_DB` with `RAW`, `CLEAN`, `BIZ`, and `TRANSFORM` schemas
-   if they don't exist. Give `PURCHASE_ORDER_PIPELINE_ROLE` usage on the
-   database, schemas, and `PO_WAREHOUSE`. Grant it CREATE TABLE on the RAW,
-   CLEAN, and BIZ schemas, CREATE VIEW on CLEAN and BIZ, and CREATE DBT PROJECT
-   on TRANSFORM. An administrator can apply these schema-level grants before CI runs.
+   if they don't exist. Run the [pipeline role grants](../snowflake/init/grant-pipeline-access.sql)
+   in Snowsight with an administrator role before CI runs. If you configured a
+   custom RAW location, use that database and schema for the RAW grants.
 2. Run [Initialize environment](../.github/workflows/initialize-environment.yml)
    with `test` and `snowflake`. The default `all` also provisions MySQL and Aiven.
-   The [warehouse SQL](../snowflake/init/initialize-warehouse.sql) creates the
-   tables and views using the [GitHub OIDC service user](../docs/snowflake-github-actions-oidc.md).
+   The initializer runs the [RAW SQL](../snowflake/init/initialize-raw.sql) and
+   the dbt project's [warehouse DDL](../snowflake/dbt/ddl/warehouse.sql) using
+   the [GitHub OIDC service user](../docs/snowflake-github-actions-oidc.md).
+   The dbt project's DDL defines the CLEAN and BIZ tables and reporting views.
    Reruns preserve table rows. The role that owns an older RAW table must be
    able to add `INGESTED_AT` during initialization. Historical rows without that
    column retain an unknown ingestion time. If your legacy RAW table stores an
    event envelope or has incompatible columns such as required `SNAPSHOT_HASH`,
    migrate it or point both GitHub and Astro to a compatible RAW table.
 3. Run [Deploy APIs, DAGs, and dbt](../.github/workflows/deploy-apis-dags-dbt.yml)
-   with **dbt** to publish `PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT` using
-   dbt Core 1.12.3. Future pushes to `main` that change `snowflake/dbt/`
-   publish the updated project. Apply DDL from `snowflake/init/` with the
-   initialization workflow before using models that depend on it. Use explicit
-   `ALTER TABLE` statements for changes to existing tables. Set
+   with **dbts** to publish `PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT` using
+   dbt Core 1.12.3. Snowflake CLI reads [the profile](../snowflake/dbt/profiles.yml)
+   from the project directory. Future pushes to `main` that change the dbt models, macros,
+   tests, or configuration publish the updated project. Apply DDL changes in
+   `snowflake/init/` or `snowflake/dbt/ddl/` with the initialization workflow
+   before using models that depend on them. Use explicit `ALTER TABLE`
+   statements for changes to existing tables. Set
    `SNOWFLAKE_DBT_PROJECT` in Astro to the same fully qualified name.
 4. Run the pipeline. After a successful ingestion run with rows and no
    quarantines, Airflow starts `dbt build`. The models overwrite the contents
@@ -127,6 +130,15 @@ The Airflow DAG passes that RAW location to dbt when it starts a build.
    created outside this initializer need matching columns and grant the dbt
    role SELECT, INSERT, and DELETE or use that role as their owner.
    [Snowflake dbt deployment](https://docs.snowflake.com/en/developer-guide/snowflake-cli/command-reference/dbt-commands/deploy) · [Snowflake INSERT OVERWRITE](https://docs.snowflake.com/en/sql-reference/sql/insert)
+
+### Remove legacy CLEAN tables
+
+The current dbt project uses four table aliases without the `CLEAN_` prefix.
+If an earlier build left prefixed tables, publish the current project and
+verify a build populates the four unprefixed tables. Then run the
+[legacy table cleanup SQL](../snowflake/init/drop-legacy-clean-tables.sql)
+manually with the role that owns those legacy tables. `STG_LATEST_ORDER_EVENT`
+is the staging view used by the four CLEAN tables.
 
 ### Power BI and management reporting
 

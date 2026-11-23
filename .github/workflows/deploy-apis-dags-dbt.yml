@@ -9,8 +9,9 @@ on:
       component:
         description: What to deploy
         type: choice
-        default: both
-        options: [both, apis, runtime-and-dags, dbt]
+        required: true
+        default: apis
+        options: [apis, dags, dbts]
 
 permissions:
   contents: read
@@ -50,15 +51,11 @@ jobs:
               apis=true
               ;;
             workflow_dispatch)
-              if [[ "$COMPONENT" == both || "$COMPONENT" == apis ]]; then
-                apis=true
-              fi
-              if [[ "$COMPONENT" == both || "$COMPONENT" == runtime-and-dags ]]; then
-                astro=true
-              fi
-              if [[ "$COMPONENT" == dbt ]]; then
-                dbt=true
-              fi
+              case "$COMPONENT" in
+                apis) apis=true ;;
+                dags) astro=true ;;
+                dbts) dbt=true ;;
+              esac
               ;;
             push)
               if [[ "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
@@ -66,7 +63,8 @@ jobs:
               fi
               api_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- api/)
               astro_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- airflow/)
-              dbt_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- snowflake/dbt/)
+              dbt_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- \
+                snowflake/dbt/ ':(exclude)snowflake/dbt/ddl/')
               if [[ -n "$api_changes" ]]; then
                 apis=true
               fi

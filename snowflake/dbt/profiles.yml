@@ -3,7 +3,7 @@ po_snowflake:
   outputs:
     dev:
       type: snowflake
-      # Snowflake-managed Workspaces uses its current login context.
+      # Snowflake-managed dbt uses the active Snowflake login context.
       database: PURCHASE_ORDER_DB
       warehouse: PO_WAREHOUSE
       role: PURCHASE_ORDER_PIPELINE_ROLE

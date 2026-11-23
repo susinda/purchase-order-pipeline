@@ -112,6 +112,8 @@ jobs:
 
       - name: Initialize the RAW, CLEAN, and BIZ objects
         run: |
-          snow sql -x -f snowflake/init/initialize-warehouse.sql \
+          snow sql -x \
+            -f snowflake/init/initialize-raw.sql \
+            -f snowflake/dbt/ddl/warehouse.sql \
             -D "raw_table=$SNOWFLAKE_RAW_TABLE" \
             -D "database=${SNOWFLAKE_RAW_TABLE%%.*}"

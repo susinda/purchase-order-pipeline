@@ -449,6 +449,7 @@ purchase-order-pipeline/
 ├── snowflake/
 │   ├── init/
 │   │   ├── initialize-raw.sql
+│   │   ├── initialize-transform.sql
 │   │   ├── grant-pipeline-access.sql
 │   │   └── grant-bi-view-access.sql
 │   └── dbt/
@@ -528,18 +529,24 @@ The API build in [Deploy APIs, DAGs, and dbt](.github/workflows/deploy-apis-dags
 
 Pull requests run the checks. Pushes to `main` build and deploy the APIs only when files under `api/` change. A manual run from `main` can also deploy them by selecting `apis`. The workflow publishes both tested images to GHCR with the commit SHA and `latest` tags, sets `IMAGE_TAG` in the Coolify service to the commit SHA, and triggers deployment.
 
-After a successful API deployment, the verification job checks both `/health` endpoints and waits up to five minutes per endpoint for the new commit SHA. The Target API health check also queries MySQL. After a successful Astro deployment, the job checks Kafka topic metadata and Airflow's scheduler and metadata database health. The Kafka check runs from the GitHub runner without producing or consuming messages. You can also run `python -m integration.kafka_check` from a producer or consumer host.
+After a successful API deployment, the verification job checks both `/health` endpoints and waits up to five minutes per endpoint for the new commit SHA. The Target API health check also queries MySQL. After an Astro deployment, the workflow checks Airflow's scheduler and metadata database health. It resolves the Airflow URL from the Astro2 deployment ID unless you provide an override. The GitHub runner checks Kafka topic metadata when it has a Kafka password. Run `dag_test_connections` in Astro to verify Kafka using the deployment's credentials. [Astronomer Airflow API](https://www.astronomer.io/docs/astro/airflow-api#step-2-retrieve-the-deployment-url)
+
+Select `verify` in a manual run to check the currently deployed test APIs and Airflow, plus Kafka when its runner credentials are configured. Pushes to `main` and manual `all` runs also run these checks when no deployment folders match. These runs check API health for whichever image is running.
+
+After publishing dbt, the workflow confirms that the deployment role can describe `PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT`, then checks Airflow and Kafka. The Airflow ingestion DAG runs the dbt build after ingestion. [Snowflake DESCRIBE DBT PROJECT](https://docs.snowflake.com/en/sql-reference/sql/desc-dbt-project)
 
 Configure these additional settings in the GitHub `test` environment for the verification job. [Airflow health endpoint](https://airflow.apache.org/docs/apache-airflow/stable/administration-and-deployment/logging-monitoring/check-health.html) · [Airflow REST API on Astro](https://www.astronomer.io/docs/astro/airflow-api)
 
 | Kind | Name | Value |
 |---|---|---|
-| Variable | `AIRFLOW_BASE_URL` | Airflow URL for `ASTRO2_DEPLOYMENT_ID`, including any deployment path and omitting `/api/v2` |
+| Optional variable | `AIRFLOW_BASE_URL` | Override the Airflow URL for `ASTRO2_DEPLOYMENT_ID`. Include any deployment path and omit `/api/v2`. |
 | Secret | `ASTRO2_API_TOKEN` | Existing Astro token with access to the deployment's Airflow REST API |
-| Variable | `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker address reachable from the GitHub runner |
-| Secret | `KAFKA_SASL_PASSWORD` | SASL password for the Kafka user. The workflow also accepts `KAFKA_PRODUCER_SASL_PASSWORD`. |
-| Optional variables | `KAFKA_TOPIC`, `KAFKA_SASL_USERNAME`, `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Override the defaults in `integration/po_pipeline/application.properties`. |
-| Optional secret | `KAFKA_CA_PEM` | CA certificate contents in PEM format if the broker uses a custom CA |
+| Optional variable | `KAFKA_BOOTSTRAP_SERVERS` | Override the broker address in `airflow/env.vars` for the runner's Kafka check |
+| Optional variable | `KAFKA_CONSUMER_SASL_USERNAME` | Kafka account for the runner's topic check. Defaults to `airflow-consumer`. |
+| Optional secret | `KAFKA_CONSUMER_SASL_PASSWORD` | Password for the Kafka consumer account. Set it to enable the topic check. |
+| Optional variable | `KAFKA_TOPIC` | Topic to check. Defaults to `purchase-orders`. |
+| Optional variables | `KAFKA_SECURITY_PROTOCOL`, `KAFKA_SASL_MECHANISM` | Override the defaults in `integration/po_pipeline/application.properties`. |
+| Optional secret | `KAFKA_CA_PEM` | PEM CA certificate override for the runner's Kafka check. The default is `airflow/aiven_ca.pem`. |
 
 #### One-time Coolify and GitHub setup
 
@@ -570,7 +577,7 @@ In the GitHub `test` environment, set `ASTRO2_DEPLOYMENT_ID` as a variable and `
 | `snowflake/dbt/` except `ddl/` | Publish transformation changes to the Snowflake-managed dbt project |
 | `snowflake/init/` and `snowflake/dbt/ddl/` | Apply warehouse DDL with `test` and `snowflake` in [Initialize environment](.github/workflows/initialize-environment.yml). An administrator runs the grants scripts. |
 
-For a manual run, choose `apis` for Coolify, `dags` for the Astro image and DAG bundle, or `dbts` for the Snowflake dbt project. Follow [the Astro runbook](airflow/README.md) for configuration, triggering a batch, and recovery. [Astronomer deploy action](https://github.com/astronomer/deploy-action)
+For a manual run, choose `all` to apply the same folder rules to the changes between the selected branch's latest commit and its first parent. Choose `apis` for Coolify, `dags` for the Astro image and DAG bundle, or `dbts` for the Snowflake dbt project to deploy a specific component regardless of changes. Follow the Astro runbook for configuration, triggering a batch, and recovery. [Astro runbook](airflow/README.md) · [Astronomer deploy action](https://github.com/astronomer/deploy-action)
 
 Configure the Airflow connections for Kafka, Snowflake and the Coolify APIs in Astro. Configure the Snowflake-managed dbt project and verify Kafka delivery to both destinations, Snowflake row counts, and dbt completion over a full run.
 

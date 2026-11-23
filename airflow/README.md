@@ -99,15 +99,21 @@ using the Snowflake account identifier. If Astro uses a different RAW table,
 set the GitHub variable `SNOWFLAKE_RAW_TABLE` to the same fully qualified name.
 The Airflow DAG passes that RAW location to dbt when it starts a build.
 
-1. Create `PURCHASE_ORDER_DB` with `RAW`, `CLEAN`, `BIZ`, and `TRANSFORM` schemas
-   if they don't exist. Run the [pipeline role grants](../snowflake/init/grant-pipeline-access.sql)
-   in Snowsight with an administrator role before CI runs. If you configured a
-   custom RAW location, use that database and schema for the RAW grants.
+1. Create `PURCHASE_ORDER_DB` with `RAW`, `CLEAN`, and `BIZ` schemas if they
+   don't exist. Run the [pipeline access script](../snowflake/init/grant-pipeline-access.sql)
+   in Snowsight with a role that can grant privileges. Use the configured
+   database and schema for RAW if you chose a custom location.
+   Run the [TRANSFORM setup SQL](../snowflake/init/initialize-transform.sql)
+   with a role that can create schemas in `PURCHASE_ORDER_DB` and grant access
+   to `TRANSFORM`. [Snowflake schema privileges](https://docs.snowflake.com/en/sql-reference/sql/create-schema#access-control-requirements)
 2. Run [Initialize environment](../.github/workflows/initialize-environment.yml)
    with `test` and `snowflake`. The default `all` also provisions MySQL and Aiven.
    The initializer runs the [RAW SQL](../snowflake/init/initialize-raw.sql) and
    the dbt project's [warehouse DDL](../snowflake/dbt/ddl/warehouse.sql) using
    the [GitHub OIDC service user](../docs/snowflake-github-actions-oidc.md).
+   Enable `bootstrap_transform` to run the TRANSFORM setup SQL first when the
+   pipeline role has schema-creation and grant privileges. The option defaults
+   to off for deployments bootstrapped in Snowsight.
    The dbt project's DDL defines the CLEAN and BIZ tables and reporting views.
    Reruns preserve table rows. The role that owns an older RAW table must be
    able to add `INGESTED_AT` during initialization. Historical rows without that

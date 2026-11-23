@@ -8,7 +8,7 @@ from .kafka_config import connection_options, kafka_topic
 def main():
     topic = kafka_topic(os.environ)
     consumer = KafkaConsumer(
-        **connection_options(os.environ, role="producer"),
+        **connection_options(os.environ, role="consumer"),
         client_id="purchaseorders-smoke",
         group_id=None,
         enable_auto_commit=False,

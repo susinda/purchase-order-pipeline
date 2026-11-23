@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: What to deploy
+        description: What to deploy or verify (all checks the selected commit for changes)
         type: choice
         required: true
         default: apis
-        options: [apis, dags, dbts]
+        options: [all, apis, dags, dbts, verify]
 
 permissions:
   contents: read
@@ -29,9 +29,10 @@ jobs:
       apis: ${{ steps.changes.outputs.apis }}
       astro: ${{ steps.changes.outputs.astro }}
       dbt: ${{ steps.changes.outputs.dbt }}
+      verify_only: ${{ steps.changes.outputs.verify_only }}
     steps:
       - uses: actions/checkout@v6
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.component == 'all')
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -46,19 +47,17 @@ jobs:
           apis=false
           astro=false
           dbt=false
-          case "$GITHUB_EVENT_NAME" in
-            pull_request)
-              apis=true
-              ;;
-            workflow_dispatch)
-              case "$COMPONENT" in
-                apis) apis=true ;;
-                dags) astro=true ;;
-                dbts) dbt=true ;;
-              esac
-              ;;
-            push)
-              if [[ "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
+          verify_only=false
+          case "$GITHUB_EVENT_NAME:$COMPONENT" in
+            pull_request:*|workflow_dispatch:apis) apis=true ;;
+            workflow_dispatch:dags) astro=true ;;
+            workflow_dispatch:dbts) dbt=true ;;
+            workflow_dispatch:verify) verify_only=true ;;
+            push:*|workflow_dispatch:all)
+              if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+                BEFORE_SHA=$(git rev-parse --verify --quiet "$GITHUB_SHA^" || true)
+              fi
+              if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" == 0000000000000000000000000000000000000000 ]]; then
                 BEFORE_SHA=$(git hash-object -w -t tree --stdin < /dev/null)
               fi
               api_changes=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- api/)
@@ -74,9 +73,13 @@ jobs:
               if [[ -n "$dbt_changes" ]]; then
                 dbt=true
               fi
+              if [[ "$apis" == false && "$astro" == false && "$dbt" == false ]]; then
+                verify_only=true
+              fi
               ;;
           esac
-          printf 'apis=%s\nastro=%s\ndbt=%s\n' "$apis" "$astro" "$dbt" >> "$GITHUB_OUTPUT"
+          printf 'apis=%s\nastro=%s\ndbt=%s\nverify_only=%s\n' \
+            "$apis" "$astro" "$dbt" "$verify_only" >> "$GITHUB_OUTPUT"
 
   build:
     name: Test and build both APIs
@@ -247,36 +250,76 @@ jobs:
           snow dbt deploy PO_DBT_PROJECT --source snowflake/dbt \
             --database PURCHASE_ORDER_DB --schema TRANSFORM --dbt-version 1.12.3 -x
 
+      - name: Verify the deployed dbt project in Snowflake
+        run: snow sql -x -q 'DESCRIBE DBT PROJECT PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT'
+
   verify_services:
     name: Verify deployed services
-    needs: [deploy_apis, deploy_astro]
+    needs: [check_changes, deploy_apis, deploy_astro, deploy_dbt]
     if: >-
       !cancelled() &&
-      (needs.deploy_apis.result == 'success' || needs.deploy_astro.result == 'success')
+      (needs.check_changes.outputs.verify_only == 'true' ||
+      needs.deploy_apis.result == 'success' || needs.deploy_astro.result == 'success' ||
+      needs.deploy_dbt.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: test
+    env:
+      VERIFY_APIS: ${{ needs.check_changes.outputs.verify_only == 'true' || needs.deploy_apis.result == 'success' }}
+      VERIFY_ASTRO: >-
+        ${{ needs.check_changes.outputs.verify_only == 'true' || needs.deploy_astro.result == 'success' ||
+        needs.deploy_dbt.result == 'success' }}
+      ASTRO2_DEPLOYMENT_ID: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
+      AIRFLOW_BASE_URL: ${{ vars.AIRFLOW_BASE_URL || secrets.AIRFLOW_BASE_URL }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
 
-      - name: Check the services deployed in this run
+      - name: Install Astro CLI for Airflow URL discovery
+        if: env.VERIFY_ASTRO == 'true' && env.AIRFLOW_BASE_URL == '' && env.ASTRO2_DEPLOYMENT_ID != ''
+        uses: astronomer/setup-astro-cli@v0.0.1
+        with:
+          version: '1.45.0'
+
+      - name: Resolve the Airflow URL from Astro2
+        if: env.VERIFY_ASTRO == 'true' && env.AIRFLOW_BASE_URL == '' && env.ASTRO2_DEPLOYMENT_ID != ''
+        shell: bash
+        env:
+          ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
+        run: |
+          if [[ -z "$ASTRO_API_TOKEN" ]]; then
+            exit 0
+          fi
+          if ! url=$(astro deployment inspect "$ASTRO2_DEPLOYMENT_ID" --key metadata.airflow_api_url --clean-output); then
+            echo '::notice::Astro did not return an Airflow URL. Set AIRFLOW_BASE_URL in the GitHub test environment to run the Airflow health check.'
+            exit 0
+          fi
+          if [[ "$url" != *://* ]]; then
+            url="https://$url"
+          fi
+          url=${url%/}
+          url=${url%/api/v[12]}
+          url=${url%/home}
+          if [[ "$url" =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$ ]]; then
+            printf 'AIRFLOW_BASE_URL=%s\n' "$url" >> "$GITHUB_ENV"
+          else
+            echo '::notice::Astro returned an unexpected Airflow URL. Set AIRFLOW_BASE_URL in the GitHub test environment.'
+          fi
+
+      - name: Check the selected services
         shell: bash
         env:
           SOURCE_API_URL: ${{ vars.SOURCE_API_URL }}
           TARGET_API_URL: ${{ vars.TARGET_API_URL }}
-          VERIFY_APIS: ${{ needs.deploy_apis.result == 'success' }}
-          VERIFY_ASTRO: ${{ needs.deploy_astro.result == 'success' }}
-          EXPECTED_IMAGE_TAG: ${{ github.sha }}
-          KAFKA_BOOTSTRAP_SERVERS: ${{ vars.KAFKA_BOOTSTRAP_SERVERS }}
+          EXPECTED_IMAGE_TAG: ${{ needs.deploy_apis.result == 'success' && github.sha || '' }}
+          KAFKA_BOOTSTRAP_SERVERS: ${{ vars.KAFKA_BOOTSTRAP_SERVERS || secrets.KAFKA_BOOTSTRAP_SERVERS }}
           KAFKA_TOPIC: ${{ vars.KAFKA_TOPIC }}
           KAFKA_SECURITY_PROTOCOL: ${{ vars.KAFKA_SECURITY_PROTOCOL }}
           KAFKA_SASL_MECHANISM: ${{ vars.KAFKA_SASL_MECHANISM }}
-          KAFKA_SASL_USERNAME: ${{ vars.KAFKA_SASL_USERNAME || secrets.KAFKA_SASL_USERNAME }}
-          KAFKA_SASL_PASSWORD: ${{ secrets.KAFKA_SASL_PASSWORD || secrets.KAFKA_PRODUCER_SASL_PASSWORD }}
+          KAFKA_CONSUMER_SASL_USERNAME: ${{ vars.KAFKA_CONSUMER_SASL_USERNAME || secrets.KAFKA_CONSUMER_SASL_USERNAME }}
+          KAFKA_CONSUMER_SASL_PASSWORD: ${{ secrets.KAFKA_CONSUMER_SASL_PASSWORD }}
           KAFKA_CA_PEM: ${{ secrets.KAFKA_CA_PEM }}
-          AIRFLOW_BASE_URL: ${{ vars.AIRFLOW_BASE_URL }}
           ASTRO2_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         run: |
           failed=0
@@ -296,13 +339,24 @@ jobs:
               echo "Set $setting in the test environment."
               return 1
             fi
-            python3 tests/check_api.py health "$url" --image-tag "$EXPECTED_IMAGE_TAG"
+            local args=(health "$url")
+            if [[ -n "$EXPECTED_IMAGE_TAG" ]]; then
+              args+=(--image-tag "$EXPECTED_IMAGE_TAG")
+            fi
+            python3 tests/check_api.py "${args[@]}"
           }
 
           check_kafka() {
             if [[ -z "$KAFKA_BOOTSTRAP_SERVERS" ]]; then
-              echo 'Set KAFKA_BOOTSTRAP_SERVERS in the test environment.'
+              KAFKA_BOOTSTRAP_SERVERS=$(PYTHONPATH=airflow python3 -c 'from include.po_settings import get_setting; print(get_setting("KAFKA_BOOTSTRAP_SERVERS", ""))') || return 1
+              export KAFKA_BOOTSTRAP_SERVERS
+            fi
+            if [[ -z "$KAFKA_BOOTSTRAP_SERVERS" ]]; then
+              echo 'Set KAFKA_BOOTSTRAP_SERVERS in the GitHub test environment or airflow/env.vars.'
               return 1
+            fi
+            if [[ -z "$KAFKA_CA_PEM" ]]; then
+              export KAFKA_SSL_CAFILE=airflow/aiven_ca.pem
             fi
             local venv="$RUNNER_TEMP/kafka-check"
             python3 -m venv "$venv" &&
@@ -311,8 +365,12 @@ jobs:
           }
 
           check_airflow() {
-            if [[ -z "$AIRFLOW_BASE_URL" || -z "$ASTRO2_API_TOKEN" ]]; then
-              echo 'Set AIRFLOW_BASE_URL and ASTRO2_API_TOKEN in the test environment.'
+            if [[ -z "$ASTRO2_API_TOKEN" ]]; then
+              echo 'Set the ASTRO2_API_TOKEN secret in the GitHub test environment.'
+              return 1
+            fi
+            if [[ -z "$AIRFLOW_BASE_URL" ]]; then
+              echo 'Set AIRFLOW_BASE_URL for the Astro2 deployment in the GitHub test environment.'
               return 1
             fi
             curl -fsS --proto '=https' --max-time 10 --retry 2 --retry-max-time 25 \
@@ -327,7 +385,11 @@ jobs:
             check 'Target API' check_api "$TARGET_API_URL" TARGET_API_URL
           fi
           if [[ "$VERIFY_ASTRO" == true ]]; then
-            check 'Kafka topic' check_kafka
+            if [[ -n "$KAFKA_CONSUMER_SASL_PASSWORD" ]]; then
+              check 'Kafka topic' check_kafka
+            else
+              echo 'Kafka check skipped. Set the KAFKA_CONSUMER_SASL_PASSWORD secret in the GitHub test environment to enable it.'
+            fi
             check 'Airflow' check_airflow
           fi
           exit "$failed"

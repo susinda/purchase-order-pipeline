@@ -13,6 +13,10 @@ on:
         type: choice
         default: all
         options: [all, mysql-and-kafka, snowflake]
+      bootstrap_transform:
+        description: Create and grant access to TRANSFORM when the Snowflake role has permission
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -110,9 +114,15 @@ jobs:
           use-oidc: true
           cli-version: '3.16'
 
-      - name: Initialize the RAW, CLEAN, and BIZ objects
+      - name: Initialize Snowflake objects
+        env:
+          BOOTSTRAP_TRANSFORM: ${{ inputs.bootstrap_transform }}
         run: |
-          snow sql -x \
+          sql_args=(-x)
+          if [[ "$BOOTSTRAP_TRANSFORM" == true ]]; then
+            sql_args+=(-f snowflake/init/initialize-transform.sql)
+          fi
+          snow sql "${sql_args[@]}" \
             -f snowflake/init/initialize-raw.sql \
             -f snowflake/dbt/ddl/warehouse.sql \
             -D "raw_table=$SNOWFLAKE_RAW_TABLE" \

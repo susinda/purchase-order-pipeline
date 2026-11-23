@@ -1,11 +1,11 @@
 version: 2
 sources:
   - name: raw
-    database: "{{ env_var('PO_RAW_DATABASE', 'PURCHASE_ORDER_DB') }}"
-    schema: "{{ env_var('PO_RAW_SCHEMA', 'RAW') }}"
+    database: "{{ env_var('DBT_PO_RAW_DATABASE', 'PURCHASE_ORDER_DB') }}"
+    schema: "{{ env_var('DBT_PO_RAW_SCHEMA', 'RAW') }}"
     tables:
       - name: purchase_order_events
-        identifier: "{{ env_var('PO_RAW_TABLE', 'PURCHASE_ORDER_EVENTS') }}"
+        identifier: "{{ env_var('DBT_PO_RAW_TABLE', 'PURCHASE_ORDER_EVENTS') }}"
         columns:
           - name: EVENT_ID
             data_tests: [not_null, unique]

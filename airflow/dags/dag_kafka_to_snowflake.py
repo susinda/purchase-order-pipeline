@@ -331,9 +331,9 @@ with DAG(
         result_row = hook.get_first(
             f"EXECUTE DBT PROJECT {project} ARGS = 'build' "
             "ENV_VARS = ("
-            f"'PO_RAW_DATABASE' = '{raw_database}', "
-            f"'PO_RAW_SCHEMA' = '{raw_schema}', "
-            f"'PO_RAW_TABLE' = '{raw_table}')"
+            f"'DBT_PO_RAW_DATABASE' = '{raw_database}', "
+            f"'DBT_PO_RAW_SCHEMA' = '{raw_schema}', "
+            f"'DBT_PO_RAW_TABLE' = '{raw_table}')"
         )
         if not result_row or str(result_row[0]).upper() != "TRUE":
             raise RuntimeError(f"Snowflake-managed dbt build failed for {project}")

@@ -1,6 +1,6 @@
 """DAG 1: Fetch complete purchase-order snapshots and publish one Kafka event per order.
 
-Graph: read_source_api -> publish_to_kafka -> [trigger_target_dag, trigger_snowflake_dag]
+Graph: read_source_api -> validate_purchase_orders -> publish_to_kafka -> both consumers
 
 Manual parameter: load_type = initial | incremental (the Source API's actual values).
 Small exercise dataset: the source batch is passed through XCom (size-limited).
@@ -20,7 +20,7 @@ LOG = logging.getLogger("airflow.task")
 
 with DAG(
     dag_id="dag_source_api_to_kafka",
-    description="Source API -> individual Kafka order events -> trigger both destinations",
+    description="Fetch and validate purchase orders, publish Kafka events, and trigger both destinations",
     start_date=datetime(2026, 11, 1, tzinfo=timezone.utc),
     schedule=None,
     catchup=False,
@@ -38,7 +38,7 @@ with DAG(
         load_type = get_current_context()["params"]["load_type"]
         url = required_setting("SOURCE_API_URL").rstrip("/") + "/purchase-orders"
         auth = (required_setting("SOURCE_API_USERNAME"), required_setting("SOURCE_API_PASSWORD"))
-        LOG.info("[1/2] GET Source API: %s?load_type=%s", url, load_type)
+        LOG.info("[1/3] GET Source API: %s?load_type=%s", url, load_type)
         started = time.monotonic()
         response = requests.get(url, params={"load_type": load_type}, auth=auth, timeout=45)
         LOG.info("Source HTTP=%s elapsed=%.2fs bytes=%s", response.status_code,
@@ -54,16 +54,50 @@ with DAG(
             orders = None
         if not isinstance(orders, list):
             raise ValueError("Unexpected Source API JSON; expected list or object containing order list")
-        for index, order in enumerate(orders):
-            if not isinstance(order, dict) or not order.get("OrderNumber"):
-                raise ValueError(f"Order index {index} missing OrderNumber")
         # XCom is suitable for the small supplied fixtures only, not large data transfers.
         serialized = json.dumps(orders, separators=(",", ":"))
         max_size = int(get_setting("PO_MAX_XCOM_BYTES", "1048576"))
         if len(serialized.encode("utf-8")) > max_size:
             raise ValueError("Extract exceeds safe XCom size. Stage in object storage instead.")
-        LOG.info("Source extract validated: %d complete purchase-order snapshots", len(orders))
+        LOG.info("Fetched %d purchase-order snapshots", len(orders))
         return {"load_type": load_type, "orders": orders}
+
+    @task(do_xcom_push=False)
+    def validate_purchase_orders(extract):
+        """Check the fields used to identify and version orders and their children."""
+
+        def require_key(record, field, path, *, allow_integer=False):
+            if not isinstance(record, dict):
+                raise ValueError(f"{path} must be an object")
+            value = record.get(field)
+            if isinstance(value, str) and value.strip():
+                return
+            if allow_integer and type(value) is int:
+                return
+            raise ValueError(f"{path}.{field} is missing or invalid")
+
+        def children(record, field, path):
+            rows = record.get(field)
+            if rows is None:
+                return []
+            if not isinstance(rows, list):
+                raise ValueError(f"{path}.{field} must be an array")
+            return rows
+
+        orders = extract["orders"]
+        for order_index, order in enumerate(orders):
+            order_path = f"orders[{order_index}]"
+            require_key(order, "OrderNumber", order_path)
+            require_key(order, "LastUpdated", order_path)
+            for line_index, line in enumerate(children(order, "OrderLines", order_path)):
+                line_path = f"{order_path}.OrderLines[{line_index}]"
+                require_key(line, "LineNumber", line_path, allow_integer=True)
+                for collection, key in (("CodingRows", "RowIndex"), ("GoodsReceipts", "GoodsReceiptNumber")):
+                    for row_index, row in enumerate(children(line, collection, line_path)):
+                        row_path = f"{line_path}.{collection}[{row_index}]"
+                        require_key(row, key, row_path, allow_integer=True)
+
+        LOG.info("[2/3] Validated key fields for %d purchase-order snapshots", len(orders))
 
     @task(retries=2, retry_delay=timedelta(seconds=20))
     def publish_to_kafka(extract):
@@ -89,7 +123,7 @@ with DAG(
         acknowledged = [0]
         errors = []
         orders = extract["orders"]
-        LOG.info("[2/2] Publish %d purchase-order events to Kafka topic=%s run_id=%s batch_id=%s",
+        LOG.info("[3/3] Publish %d purchase-order events to Kafka topic=%s run_id=%s batch_id=%s",
                  len(orders), topic, run_id, batch_id)
 
         def receipt(error, message):
@@ -130,7 +164,9 @@ with DAG(
                 "load_type": extract["load_type"], "topic": topic}
 
     extracted = read_source_api()
+    validated = validate_purchase_orders(extracted)
     published = publish_to_kafka(extracted)
+    validated >> published
     # These independent group consumers need no manifest; they run in PARALLEL.
     target = TriggerDagRunOperator(
         task_id="trigger_target_dag",
@@ -152,9 +188,10 @@ with DAG(
 # Parse-time validation: Airflow must NOT register an empty/incomplete DAG.
 # These checks run when Airflow imports this Python file, not when tasks run.
 # ---------------------------------------------------------------------------
-DAG_CODE_VERSION = "2026-11-22-group-consumers-no-manifest-v2"
+DAG_CODE_VERSION = "2026-11-23-purchase-order-validation"
 EXPECTED_TASK_IDS = {
     "read_source_api",
+    "validate_purchase_orders",
     "publish_to_kafka",
     "trigger_target_dag",
     "trigger_snowflake_dag",
@@ -170,7 +207,8 @@ if actual_task_ids != EXPECTED_TASK_IDS:
 
 EXPECTED_UPSTREAM = {
     "read_source_api": set(),
-    "publish_to_kafka": {"read_source_api"},
+    "validate_purchase_orders": {"read_source_api"},
+    "publish_to_kafka": {"read_source_api", "validate_purchase_orders"},
     "trigger_target_dag": {"publish_to_kafka"},
     "trigger_snowflake_dag": {"publish_to_kafka"},
 }

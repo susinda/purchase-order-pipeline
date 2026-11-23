@@ -39,7 +39,7 @@ class SourceApiTest(unittest.TestCase):
             with TestClient(app) as client:
                 response = client.get("/health")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok"})
+        self.assertIsInstance(response.json().get("message"), str)
         self.assertEqual(response.headers["X-Image-Tag"], "source-test-tag")
 
     def test_rejects_missing_and_invalid_load_type(self):

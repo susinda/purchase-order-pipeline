@@ -116,7 +116,7 @@ def health(request: Request, response: Response) -> dict[str, str]:
             cursor.execute(CHECK_SCHEMA)
     if image_tag := os.environ.get("APP_IMAGE_TAG"):
         response.headers["X-Image-Tag"] = image_tag
-    return {"status": "ok"}
+    return {"message": "Target API OK"}
 
 
 @protected.post(

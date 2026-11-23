@@ -1,6 +1,6 @@
 """DAG 2: Kafka purchase-order snapshots -> Target API; quarantine bad records.
 
-Graph: consume_and_deliver_orders (one Airflow task; Kafka group poll -> HTTP POST -> commit)
+Graph: consume_and_deliver_orders (Kafka group poll -> validate -> deliver or quarantine -> commit)
 Can be triggered manually or by DAG 1; no Kafka-offset manifest is required.
 Kafka's Apache Airflow provider installs confluent-kafka, used directly here because
 existing credentials come from env.vars, not Airflow Kafka Connections.
@@ -89,6 +89,26 @@ def publish_to_dlt(event, reason, source_position):
         raise RuntimeError("Target DLT delivery not confirmed; source event remains unresolved")
 
 
+def check_required_fields(record, path, fields, children=()):
+    """Report the first missing key in an order or its optional child arrays."""
+    if not isinstance(record, dict):
+        return f"{path} must be an object"
+    for field in fields:
+        if field not in record:
+            return f"Missing required field {path}.{field}"
+    for collection, child_fields, grandchildren in children:
+        rows = record.get(collection)
+        if rows is None:
+            continue
+        if not isinstance(rows, list):
+            return f"{path}.{collection} must be an array"
+        for index, row in enumerate(rows):
+            reason = check_required_fields(row, f"{path}.{collection}[{index}]", child_fields, grandchildren)
+            if reason:
+                return reason
+    return None
+
+
 def check_order(event):
     """Record-level checks only. Unexpected structure is a permanent data error."""
     if event.get("_invalid_json"):
@@ -96,7 +116,15 @@ def check_order(event):
     payload = event.get("payload")
     if not isinstance(payload, dict):
         return "Missing or invalid purchase-order payload"
-    number = payload.get("OrderNumber")
+    reason = check_required_fields(payload, "payload", ("OrderNumber", "LastUpdated"), (
+        ("OrderLines", ("LineNumber",), (
+            ("CodingRows", ("RowIndex",), ()),
+            ("GoodsReceipts", ("GoodsReceiptNumber",), ()),
+        )),
+    ))
+    if reason:
+        return reason
+    number = payload["OrderNumber"]
     if not number or str(number) != str(event.get("order_number")):
         return "Missing or mismatched OrderNumber"
     if not event.get("event_id"):

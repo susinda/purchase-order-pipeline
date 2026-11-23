@@ -65,7 +65,11 @@ endpoints, Kafka metadata, and the configured Snowflake connection. Set
 ACLs.
 
 Trigger `dag_source_api_to_kafka` with `{"load_type":"initial"}` and check
-`dag_kafka_to_target_api` and `dag_kafka_to_snowflake`. The publisher waits
+`dag_kafka_to_target_api` and `dag_kafka_to_snowflake`. The
+`validate_purchase_orders` task checks `OrderNumber` and `LastUpdated` on each
+order and the identifiers on any lines, coding rows, and goods receipts. A
+validation failure reports the field path and blocks the entire extract from
+being published. The publisher waits
 for Kafka acknowledgements before triggering both consumers independently.
 Check their results before triggering `{"load_type":"incremental"}`. For a
 clean demo, expect 100 published records on the initial run and 20 on the
@@ -88,6 +92,9 @@ and can be set using `PO_BACKEND_MAX_MESSAGES` and
 `PO_ANALYTICS_MAX_MESSAGES`. Trigger the affected consumer again if records
 remain after a run, and check its logs and group lag.
 
+The Target DAG checks that each order contains `OrderNumber` and `LastUpdated`
+and that any child records contain their keys before posting to the API. It
+sends invalid records to the backend dead-letter topic and marks the run failed.
 The Target DAG supplies the Kafka event ID as the API's idempotency key.
 Consumers advance offsets after the destination confirms a write or after a
 DLT publish is acknowledged. Repair and replay quarantined records from the

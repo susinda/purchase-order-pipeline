@@ -31,7 +31,7 @@ python -m uvicorn api.source.main:app
 
 ## Run the Target API
 
-Set `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` in your local `.env` using the names in `.env.example`. Use ASCII for the Basic Auth credentials and separate passwords for the API, MySQL application user and MySQL root. Use HTTPS for Basic Auth outside local development. The Compose target profile starts the API and an internal MySQL server with a persistent named volume. MySQL initializes the database and table on first startup.
+Set `TARGET_API_USERNAME`, `TARGET_API_PASSWORD`, `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` in your local `.env`. Use ASCII for the Basic Auth credentials and separate passwords for the API, MySQL application user and MySQL root. Use HTTPS for Basic Auth outside local development. The Compose target profile starts the API and an internal MySQL server with a persistent named volume. MySQL initializes the database and table on first startup.
 
 ```bash
 docker compose --profile target up --build -d target-api
@@ -101,7 +101,7 @@ Use the [initialization workflow](#initialize-an-environment-with-github-actions
 
    If you use one service user for the demo, apply all three rules to that user. If you create the optional test topic, grant the producer `Write` and the inspection consumer `Read` on `purchaseorders-test` too.
 
-5. **Get the connection settings and CA certificate.** In the Kafka service, open **Overview → Quick connect → Python**. Select your topic, **SASL**, and your service user. Under **Downloads**, save the CA certificate as `integration/aiven_ca.pem`. Copy the SASL host and port into `KAFKA_BOOTSTRAP_SERVERS` and the password into `KAFKA_PRODUCER_SASL_PASSWORD` or `KAFKA_INSPECTION_SASL_PASSWORD` for the matching user in `application.properties`. The properties file supplies the SASL defaults, and `.env.example` supplies the CA file path. [Aiven Python connection guide](https://aiven.io/docs/products/kafka/howto/connect-with-python)
+5. **Get the connection settings and CA certificate.** In the Kafka service, open **Overview → Quick connect → Python**. Select your topic, **SASL**, and your service user. Under **Downloads**, save the CA certificate as `integration/aiven_ca.pem` and set `KAFKA_SSL_CAFILE=integration/aiven_ca.pem`. Copy the SASL host and port into `KAFKA_BOOTSTRAP_SERVERS` and the password into `KAFKA_PRODUCER_SASL_PASSWORD` or `KAFKA_INSPECTION_SASL_PASSWORD` for the matching user in `application.properties`. The properties file supplies the SASL defaults. [Aiven Python connection guide](https://aiven.io/docs/products/kafka/howto/connect-with-python)
 
 Use these commands from the repository root to set up the virtual environment and install the Kafka client.
 
@@ -109,7 +109,7 @@ Use these commands from the repository root to set up the virtual environment an
 test -d .venv || python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r integration/requirements.txt
-test -f .env || (umask 077 && cp .env.example .env)
+test -f .env || (umask 077 && touch .env)
 ```
 
 Fill in `.env` with the settings above. Quote values containing shell special characters. Git ignores `.env` and `integration/aiven_ca.pem`.
@@ -467,7 +467,6 @@ purchase-order-pipeline/
 │   ├── adr/
 │   └── walkthrough.md
 ├── .github/workflows/
-├── .env.example
 └── .gitignore
 ```
 
@@ -505,7 +504,7 @@ docker build -t purchase-order-source api/source
 docker build -t purchase-order-target api/target
 ```
 
-Use the root `.env.example` for repository Compose and Kafka CLI settings. Use each API's own `.env.example` for standalone deployment. Keep real credentials in local ignored `.env` files or cloud secret stores.
+Set the repository Compose and Kafka CLI settings in your local `.env`. Use each API's own `.env.example` for standalone deployment. Keep real credentials in local ignored `.env` files or cloud secret stores.
 
 ### Git and commits
 

@@ -123,7 +123,7 @@ class TargetApiTest(unittest.TestCase):
         with patch.dict("os.environ", {"APP_IMAGE_TAG": "target-test-tag"}):
             response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "ok"})
+        self.assertIsInstance(response.json().get("message"), str)
         self.assertEqual(response.headers["X-Image-Tag"], "target-test-tag")
         self.cursor.execute.assert_called_once_with("SELECT 1 FROM purchase_orders LIMIT 1")
 

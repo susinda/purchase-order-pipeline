@@ -305,30 +305,39 @@ jobs:
         with:
           version: '1.45.0'
 
-      - name: Resolve the Airflow URL from Astro2
-        if: steps.astro_cli.outcome == 'success'
+      - name: Check Airflow base URL
+        id: airflow_url
+        if: ${{ !cancelled() }}
         shell: bash
         env:
+          ASTRO_CLI_OUTCOME: ${{ steps.astro_cli.outcome }}
           ASTRO_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         run: |
-          if [[ -z "$ASTRO_API_TOKEN" ]]; then
-            exit 0
+          url=$AIRFLOW_BASE_URL
+          if [[ -z "$url" && "$ASTRO_CLI_OUTCOME" == success && -n "$ASTRO_API_TOKEN" ]]; then
+            if url=$(astro deployment inspect "$ASTRO2_DEPLOYMENT_ID" --key metadata.airflow_api_url --clean-output); then
+              if [[ -n "$url" && "$url" != *://* ]]; then
+                url="https://$url"
+              fi
+              url=${url%/}
+              url=${url%/api/v[12]}
+              url=${url%/home}
+            else
+              url=''
+            fi
           fi
-          if ! url=$(astro deployment inspect "$ASTRO2_DEPLOYMENT_ID" --key metadata.airflow_api_url --clean-output); then
-            echo '::notice::Astro did not return an Airflow URL. Set AIRFLOW_BASE_URL in the GitHub test environment to run the Airflow health check.'
+
+          if [[ -z "$url" ]]; then
+            echo '::warning::Airflow health check skipped. Set AIRFLOW_BASE_URL or configure Astro deployment URL discovery in the GitHub test environment.'
             exit 0
-          fi
-          if [[ "$url" != *://* ]]; then
-            url="https://$url"
           fi
           url=${url%/}
-          url=${url%/api/v[12]}
-          url=${url%/home}
-          if [[ "$url" =~ ^https://[A-Za-z0-9.-]+(/[A-Za-z0-9._~/-]*)?$ ]]; then
-            printf 'AIRFLOW_BASE_URL=%s\n' "$url" >> "$GITHUB_ENV"
-          else
-            echo '::notice::Astro returned an unexpected Airflow URL. Set AIRFLOW_BASE_URL in the GitHub test environment.'
+          if [[ ! "$url" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ || "$url" =~ /api/v[12](/|$) ]]; then
+            echo '::warning::Airflow health check skipped. Use an HTTPS Airflow base URL without an API path, query, or fragment.'
+            exit 0
           fi
+          printf 'health_url=%s/api/v2/monitor/health\n' "$url" >> "$GITHUB_OUTPUT"
+          echo 'Airflow base URL is configured.'
 
       - name: Check Source API health
         if: ${{ !cancelled() }}
@@ -390,17 +399,12 @@ jobs:
           timeout 45s "$venv/bin/python" -m integration.kafka_check
 
       - name: Check Airflow scheduler and metadata database health
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.airflow_url.outputs.health_url != '' }}
         shell: bash
         env:
           ASTRO2_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
+          AIRFLOW_HEALTH_URL: ${{ steps.airflow_url.outputs.health_url }}
         run: |
-          if [[ -z "$AIRFLOW_BASE_URL" ]]; then
-            echo '::warning::Airflow health check skipped. Set AIRFLOW_BASE_URL or configure Astro deployment URL discovery in the GitHub test environment.'
-            exit 0
-          fi
-          health_url="${AIRFLOW_BASE_URL%/}/api/v2/monitor/health"
-          echo "Checking Airflow at $health_url"
           headers=(-H 'Accept: application/json')
           if [[ -n "$ASTRO2_API_TOKEN" ]]; then
             headers+=(-H "Authorization: Bearer $ASTRO2_API_TOKEN")
@@ -408,7 +412,7 @@ jobs:
             echo '::notice::ASTRO2_API_TOKEN is unset. Checking the Airflow endpoint without authentication.'
           fi
           if ! response=$(curl -fsS --proto '=https' --max-time 10 --retry 2 --retry-max-time 25 \
-            "${headers[@]}" "$health_url"); then
+            "${headers[@]}" "$AIRFLOW_HEALTH_URL"); then
             echo '::warning::Airflow health endpoint did not return a successful response. Check AIRFLOW_BASE_URL and ASTRO2_API_TOKEN.'
           elif ! jq -se 'length == 1 and (.[0] | .metadatabase.status == "healthy" and .scheduler.status == "healthy")' <<< "$response" >/dev/null; then
             echo '::warning::Airflow is reachable, but its health response did not confirm a healthy scheduler and metadata database.'

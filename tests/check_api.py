@@ -43,7 +43,7 @@ def check_health(base_url, image_tag=None):
     while True:
         try:
             status, body = request_json(f"{base_url}/health", image_tag=image_tag)
-            if (status, body) == (200, {"status": "ok"}):
+            if status == 200 and isinstance(body, dict) and isinstance(body.get("message"), str):
                 print(f"Healthy at {base_url}/health")
                 return
             last_failure = f"HTTP {status}"

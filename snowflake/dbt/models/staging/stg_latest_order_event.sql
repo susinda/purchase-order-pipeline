@@ -1,5 +1,6 @@
 -- Complete order snapshots: select the latest update per ORDER_NUMBER.
 -- Re-running is safe, and late-arriving older snapshots don't replace newer ones.
+-- Test change
 select
     EVENT_ID, BATCH_ID, ORDER_NUMBER, LOAD_TYPE, PAYLOAD, INGESTED_AT,
     try_to_timestamp_tz(PAYLOAD:LastUpdated::varchar) as LAST_UPDATED

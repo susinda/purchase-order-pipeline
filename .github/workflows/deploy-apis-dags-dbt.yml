@@ -179,9 +179,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: test
-    steps:
     env:
       ASTRO2_DEPLOYMENT_ID: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
+    steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false

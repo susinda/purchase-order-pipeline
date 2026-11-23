@@ -49,7 +49,7 @@ app, protected = create_api(
 def health(response: Response) -> dict[str, str]:
     if image_tag := os.environ.get("APP_IMAGE_TAG"):
         response.headers["X-Image-Tag"] = image_tag
-    return {"status": "source ok"}
+    return {"status": "ok"}
 
 
 @protected.get("/purchase-orders", responses={401: {"description": "Basic authentication required"}})

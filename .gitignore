@@ -155,7 +155,6 @@ activemq-data/
 ca.pem
 aiven_ca.pem
 !/airflow/aiven_ca.pem
-/airflow/env.vars
 /airflow/airflow_settings.yaml
 .envrc
 .venv

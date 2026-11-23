@@ -1,7 +1,7 @@
 # Deploy and run the purchase-order DAGs on Astro
 
 The Astro project lives in `airflow/`. Its image contains the Python
-dependencies, `include/` helpers, and the public Aiven CA certificate.
+dependencies, `include/` helpers, non-secret `env.vars`, and the public Aiven CA certificate.
 One Astro deployment publishes the image and the `airflow/dags/` bundle together.
 
 ## Set up the deployment
@@ -12,8 +12,9 @@ One Astro deployment publishes the image and the `airflow/dags/` bundle together
 2. Use [Initialize environment](../.github/workflows/initialize-environment.yml)
    with `mysql-and-kafka` to create the Target API's MySQL tables and provision
    the Kafka topics, users, and ACLs. Deploy both APIs before running the DAGs.
-3. Set the environment variables below in Astro and create the Airflow Snowflake
-   connection. Enter its credentials in the connection or a secrets backend.
+3. Add the Secret variables below to the Astro deployment and create the
+   Airflow Snowflake connection. Enter its credentials in the connection or a
+   secrets backend.
    Initialize the warehouse and publish dbt before the first Snowflake
    ingestion run. See [Snowflake and dbt ownership](#snowflake-and-dbt-ownership).
 4. Run [Deploy APIs, DAGs, and dbt](../.github/workflows/deploy-apis-dags-dbt.yml)
@@ -21,14 +22,14 @@ One Astro deployment publishes the image and the `airflow/dags/` bundle together
    Pushes to `main` also trigger that combined deployment when a file under
    `airflow/` changes. [Astronomer deploy action](https://github.com/astronomer/deploy-action)
 
-| Astro environment variable | Value |
+| Runtime setting | Value |
 |---|---|
 | `SOURCE_API_URL`, `TARGET_API_URL` | HTTPS base URLs of the deployed APIs |
-| `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD` | Source API Basic Auth credentials |
-| `TARGET_API_USERNAME`, `TARGET_API_PASSWORD` | Target API Basic Auth credentials |
+| `SOURCE_API_USERNAME`, `SOURCE_API_PASSWORD` | Astro Secret variables for Source API Basic Auth |
+| `TARGET_API_USERNAME`, `TARGET_API_PASSWORD` | Astro Secret variables for Target API Basic Auth |
 | `KAFKA_BOOTSTRAP_SERVERS` | Aiven broker address |
-| `KAFKA_PRODUCER_SASL_USERNAME`, `KAFKA_PRODUCER_SASL_PASSWORD` | Aiven producer credentials |
-| `KAFKA_CONSUMER_SASL_USERNAME`, `KAFKA_CONSUMER_SASL_PASSWORD` | Aiven consumer credentials shared by the two downstream DAGs |
+| `KAFKA_PRODUCER_SASL_USERNAME`, `KAFKA_PRODUCER_SASL_PASSWORD` | Astro Secret variables for the Aiven producer |
+| `KAFKA_CONSUMER_SASL_USERNAME`, `KAFKA_CONSUMER_SASL_PASSWORD` | Astro Secret variables for the Aiven consumer shared by both downstream DAGs |
 | `KAFKA_TOPIC` | Purchase-order topic, defaults to `purchase-orders` |
 | `KAFKA_BACKEND_GROUP_ID`, `KAFKA_ANALYTICS_GROUP_ID` | Defaults to `purchase-orders-backend` and `purchase-orders-analytics` |
 | `KAFKA_TARGET_DLT_TOPIC`, `KAFKA_SNOWFLAKE_DLT_TOPIC` | Provisioned DLTs, normally `purchase-orders.backend.dlt` and `purchase-orders.analytics.dlt` |
@@ -36,7 +37,7 @@ One Astro deployment publishes the image and the `airflow/dags/` bundle together
 | `KAFKA_SSL_CAFILE` | Optional certificate path. The image uses its bundled `aiven_ca.pem` by default. |
 | `SNOWFLAKE_CONNECTION_ID` | Connection ID used by both Snowflake DAG tasks and the connection check, defaults to `snowflake_default` |
 | `SNOWFLAKE_RAW_TABLE` | Existing `DATABASE.SCHEMA.TABLE` with the columns listed below |
-| `SNOWFLAKE_DBT_PROJECT` | Existing managed `DATABASE.SCHEMA.PROJECT`. Leave empty for RAW ingestion alone. |
+| `SNOWFLAKE_DBT_PROJECT` | Existing managed `DATABASE.SCHEMA.PROJECT`. Omit the setting from `env.vars` and Astro for RAW ingestion alone. |
 | `KAFKA_TEST_TOPIC`, `KAFKA_TEST_GROUP_ID` | Optional for a diagnostic round-trip. The group defaults to `purchaseorders-connection-test`. |
 
 Match the topic, users, and group IDs in Astro to the provisioned ACLs. The
@@ -45,16 +46,15 @@ IDs, and Write to both DLTs. The optional round-trip needs producer Write and
 consumer Read on its dedicated topic, plus consumer Read for the diagnostic
 group. See [Kafka provisioning defaults](../integration/po_pipeline/application.properties).
 
-Use `airflow/env.vars` for the non-secret deployment settings. Add the
-credentials listed in its comments as Secret variables in the Astro deployment
-and store Snowflake authentication in the Airflow connection. The Astro CLI
-can load active settings from the file with `--load --env env.vars` when run
-from `airflow/`. Use `create` for new keys and `update` for existing keys.
-[Astro CLI variable create](https://www.astronomer.io/docs/astro/cli/astro-deployment-variable-create/) · [Astro CLI variable update](https://www.astronomer.io/docs/astro/cli/astro-deployment-variable-update/)
+The image includes the [non-secret deployment settings](env.vars).
+`po_settings.py` reads these defaults and gives nonempty Astro environment
+variables precedence. Create the credentials above as Secret environment
+variables on the Astro2 deployment. Store Snowflake authentication in the
+Airflow connection named by `SNOWFLAKE_CONNECTION_ID`. [Manage secrets and connections in Astro](https://www.astronomer.io/docs/astro/manage-connections-variables/)
 
 For local Astro, use a private `.env` populated with the settings in
 [env.vars.example](env.vars.example). From `airflow/`, run
-`astro dev start --env .env`. The image and DAG bundle exclude both files.
+`astro dev start --env .env`. The private `.env` stays out of Git and the image.
 
 ## Run and verify the DAGs
 

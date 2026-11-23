@@ -438,6 +438,7 @@ purchase-order-pipeline/
 │   ├── packages.txt
 │   ├── requirements.txt
 │   ├── aiven_ca.pem
+│   ├── env.vars
 │   ├── env.vars.example
 │   ├── include/
 │   └── dags/

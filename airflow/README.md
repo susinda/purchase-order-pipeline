@@ -121,7 +121,7 @@ The Airflow DAG passes that RAW location to dbt when it starts a build.
    event envelope or has incompatible columns such as required `SNAPSHOT_HASH`,
    migrate it or point both GitHub and Astro to a compatible RAW table.
 3. Run [Deploy APIs, DAGs, and dbt](../.github/workflows/deploy-apis-dags-dbt.yml)
-   with **dbts** to publish `PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT` using
+   with **dbt** to publish `PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT` using
    dbt Core 1.12.3. Snowflake CLI reads [the profile](../snowflake/dbt/profiles.yml)
    from the project directory. Future pushes to `main` that change the dbt models, macros,
    tests, or configuration publish the updated project. Apply DDL changes in

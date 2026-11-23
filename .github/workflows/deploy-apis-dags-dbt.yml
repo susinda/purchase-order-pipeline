@@ -10,8 +10,8 @@ on:
         description: What to deploy or verify (all checks the selected commit for changes)
         type: choice
         required: true
-        default: apis
-        options: [all, apis, dags, dbts, verify]
+        default: all
+        options: [all, api, dags, dbt, verify]
 
 permissions:
   contents: read
@@ -49,9 +49,9 @@ jobs:
           dbt=false
           verify_only=false
           case "$GITHUB_EVENT_NAME:$COMPONENT" in
-            pull_request:*|workflow_dispatch:apis) apis=true ;;
+            pull_request:*|workflow_dispatch:api) apis=true ;;
             workflow_dispatch:dags) astro=true ;;
-            workflow_dispatch:dbts) dbt=true ;;
+            workflow_dispatch:dbt) dbt=true ;;
             workflow_dispatch:verify) verify_only=true ;;
             push:*|workflow_dispatch:all)
               if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
@@ -250,9 +250,6 @@ jobs:
           snow dbt deploy PO_DBT_PROJECT --source snowflake/dbt \
             --database PURCHASE_ORDER_DB --schema TRANSFORM --dbt-version 1.12.3 -x
 
-      - name: Verify the deployed dbt project in Snowflake
-        run: snow sql -x -q 'DESCRIBE DBT PROJECT PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT'
-
   verify_services:
     name: Verify deployed services
     needs: [check_changes, deploy_apis, deploy_astro, deploy_dbt]
@@ -264,11 +261,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: test
+    permissions:
+      contents: read
+      id-token: write
     env:
       VERIFY_APIS: ${{ needs.check_changes.outputs.verify_only == 'true' || needs.deploy_apis.result == 'success' }}
       VERIFY_ASTRO: >-
         ${{ needs.check_changes.outputs.verify_only == 'true' || needs.deploy_astro.result == 'success' ||
         needs.deploy_dbt.result == 'success' }}
+      VERIFY_DBT: ${{ needs.check_changes.outputs.verify_only == 'true' || needs.deploy_dbt.result == 'success' }}
+      EXPECTED_IMAGE_TAG: ${{ needs.deploy_apis.result == 'success' && github.sha || '' }}
       ASTRO2_DEPLOYMENT_ID: ${{ vars.ASTRO2_DEPLOYMENT_ID }}
       AIRFLOW_BASE_URL: ${{ vars.AIRFLOW_BASE_URL || secrets.AIRFLOW_BASE_URL }}
     steps:
@@ -307,12 +309,28 @@ jobs:
             echo '::notice::Astro returned an unexpected Airflow URL. Set AIRFLOW_BASE_URL in the GitHub test environment.'
           fi
 
-      - name: Check the selected services
+      - name: Check Source API health
+        if: ${{ !cancelled() && env.VERIFY_APIS == 'true' }}
         shell: bash
         env:
           SOURCE_API_URL: ${{ vars.SOURCE_API_URL }}
+        run: |
+          : "${SOURCE_API_URL:?Set SOURCE_API_URL in the test environment}"
+          python3 tests/check_api.py health "$SOURCE_API_URL" --image-tag="$EXPECTED_IMAGE_TAG"
+
+      - name: Check Target API health
+        if: ${{ !cancelled() && env.VERIFY_APIS == 'true' }}
+        shell: bash
+        env:
           TARGET_API_URL: ${{ vars.TARGET_API_URL }}
-          EXPECTED_IMAGE_TAG: ${{ needs.deploy_apis.result == 'success' && github.sha || '' }}
+        run: |
+          : "${TARGET_API_URL:?Set TARGET_API_URL in the test environment}"
+          python3 tests/check_api.py health "$TARGET_API_URL" --image-tag="$EXPECTED_IMAGE_TAG"
+
+      - name: Check Kafka topic exists
+        if: ${{ !cancelled() && env.VERIFY_ASTRO == 'true' }}
+        shell: bash
+        env:
           KAFKA_BOOTSTRAP_SERVERS: ${{ vars.KAFKA_BOOTSTRAP_SERVERS || secrets.KAFKA_BOOTSTRAP_SERVERS }}
           KAFKA_TOPIC: ${{ vars.KAFKA_TOPIC }}
           KAFKA_SECURITY_PROTOCOL: ${{ vars.KAFKA_SECURITY_PROTOCOL }}
@@ -320,76 +338,54 @@ jobs:
           KAFKA_CONSUMER_SASL_USERNAME: ${{ vars.KAFKA_CONSUMER_SASL_USERNAME || secrets.KAFKA_CONSUMER_SASL_USERNAME }}
           KAFKA_CONSUMER_SASL_PASSWORD: ${{ secrets.KAFKA_CONSUMER_SASL_PASSWORD }}
           KAFKA_CA_PEM: ${{ secrets.KAFKA_CA_PEM }}
+        run: |
+          if [[ -z "$KAFKA_CONSUMER_SASL_PASSWORD" ]]; then
+            echo '::notice::Kafka check skipped. Set the KAFKA_CONSUMER_SASL_PASSWORD secret in the GitHub test environment to enable it.'
+            exit 0
+          fi
+          if [[ -z "$KAFKA_BOOTSTRAP_SERVERS" ]]; then
+            KAFKA_BOOTSTRAP_SERVERS=$(PYTHONPATH=airflow python3 -c 'from include.po_settings import get_setting; print(get_setting("KAFKA_BOOTSTRAP_SERVERS", ""))')
+            export KAFKA_BOOTSTRAP_SERVERS
+          fi
+          : "${KAFKA_BOOTSTRAP_SERVERS:?Set KAFKA_BOOTSTRAP_SERVERS in the GitHub test environment or airflow/env.vars}"
+          if [[ -z "$KAFKA_CA_PEM" ]]; then
+            export KAFKA_SSL_CAFILE=airflow/aiven_ca.pem
+          fi
+          venv="$RUNNER_TEMP/kafka-check"
+          python3 -m venv "$venv"
+          "$venv/bin/python" -m pip install -r integration/requirements.txt
+          timeout 45s "$venv/bin/python" -m integration.kafka_check
+
+      - name: Check Airflow scheduler and metadata database health
+        if: ${{ !cancelled() && env.VERIFY_ASTRO == 'true' }}
+        shell: bash
+        env:
           ASTRO2_API_TOKEN: ${{ secrets.ASTRO2_API_TOKEN }}
         run: |
-          failed=0
-          check() {
-            local service="$1"
-            shift
-            echo "Checking $service"
-            if ! "$@"; then
-              echo "::error::$service check failed"
-              failed=1
-            fi
-          }
+          : "${ASTRO2_API_TOKEN:?Set the ASTRO2_API_TOKEN secret in the GitHub test environment}"
+          : "${AIRFLOW_BASE_URL:?Set AIRFLOW_BASE_URL for the Astro2 deployment in the GitHub test environment}"
+          curl -fsS --proto '=https' --max-time 10 --retry 2 --retry-max-time 25 \
+            -H "Authorization: Bearer $ASTRO2_API_TOKEN" \
+            -H 'Accept: application/json' \
+            "${AIRFLOW_BASE_URL%/}/api/v2/monitor/health" |
+            jq -se 'length == 1 and (.[0] | .metadatabase.status == "healthy" and .scheduler.status == "healthy")'
 
-          check_api() {
-            local url="$1" setting="$2"
-            if [[ -z "$url" ]]; then
-              echo "Set $setting in the test environment."
-              return 1
-            fi
-            local args=(health "$url")
-            if [[ -n "$EXPECTED_IMAGE_TAG" ]]; then
-              args+=(--image-tag "$EXPECTED_IMAGE_TAG")
-            fi
-            python3 tests/check_api.py "${args[@]}"
-          }
+      - name: Install Snowflake CLI and obtain an OIDC token for verification
+        id: snowflake_auth
+        if: ${{ !cancelled() && env.VERIFY_DBT == 'true' }}
+        uses: snowflakedb/snowflake-actions@v3
+        with:
+          use-oidc: true
+          cli-version: '3.16'
 
-          check_kafka() {
-            if [[ -z "$KAFKA_BOOTSTRAP_SERVERS" ]]; then
-              KAFKA_BOOTSTRAP_SERVERS=$(PYTHONPATH=airflow python3 -c 'from include.po_settings import get_setting; print(get_setting("KAFKA_BOOTSTRAP_SERVERS", ""))') || return 1
-              export KAFKA_BOOTSTRAP_SERVERS
-            fi
-            if [[ -z "$KAFKA_BOOTSTRAP_SERVERS" ]]; then
-              echo 'Set KAFKA_BOOTSTRAP_SERVERS in the GitHub test environment or airflow/env.vars.'
-              return 1
-            fi
-            if [[ -z "$KAFKA_CA_PEM" ]]; then
-              export KAFKA_SSL_CAFILE=airflow/aiven_ca.pem
-            fi
-            local venv="$RUNNER_TEMP/kafka-check"
-            python3 -m venv "$venv" &&
-              "$venv/bin/python" -m pip install -r integration/requirements.txt &&
-              timeout 45s "$venv/bin/python" -m integration.kafka_check
-          }
-
-          check_airflow() {
-            if [[ -z "$ASTRO2_API_TOKEN" ]]; then
-              echo 'Set the ASTRO2_API_TOKEN secret in the GitHub test environment.'
-              return 1
-            fi
-            if [[ -z "$AIRFLOW_BASE_URL" ]]; then
-              echo 'Set AIRFLOW_BASE_URL for the Astro2 deployment in the GitHub test environment.'
-              return 1
-            fi
-            curl -fsS --proto '=https' --max-time 10 --retry 2 --retry-max-time 25 \
-              -H "Authorization: Bearer $ASTRO2_API_TOKEN" \
-              -H 'Accept: application/json' \
-              "${AIRFLOW_BASE_URL%/}/api/v2/monitor/health" |
-              jq -se 'length == 1 and (.[0] | .metadatabase.status == "healthy" and .scheduler.status == "healthy")'
-          }
-
-          if [[ "$VERIFY_APIS" == true ]]; then
-            check 'Source API' check_api "$SOURCE_API_URL" SOURCE_API_URL
-            check 'Target API' check_api "$TARGET_API_URL" TARGET_API_URL
-          fi
-          if [[ "$VERIFY_ASTRO" == true ]]; then
-            if [[ -n "$KAFKA_CONSUMER_SASL_PASSWORD" ]]; then
-              check 'Kafka topic' check_kafka
-            else
-              echo 'Kafka check skipped. Set the KAFKA_CONSUMER_SASL_PASSWORD secret in the GitHub test environment to enable it.'
-            fi
-            check 'Airflow' check_airflow
-          fi
-          exit "$failed"
+      - name: Check TRANSFORM dbt project exists
+        if: ${{ !cancelled() && steps.snowflake_auth.outcome == 'success' }}
+        shell: bash
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT || secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: GITHUB_CICD_USER
+          SNOWFLAKE_ROLE: PURCHASE_ORDER_PIPELINE_ROLE
+          SNOWFLAKE_WAREHOUSE: PO_WAREHOUSE
+        run: |
+          : "${SNOWFLAKE_ACCOUNT:?Set SNOWFLAKE_ACCOUNT in the GitHub test environment}"
+          snow sql -x -q 'DESCRIBE DBT PROJECT PURCHASE_ORDER_DB.TRANSFORM.PO_DBT_PROJECT'

@@ -6,6 +6,7 @@ Manual parameter: load_type = initial | incremental (the Source API's actual val
 Small exercise dataset: the source batch is passed through XCom (size-limited).
 For large production extracts, replace that XCom with durable object storage.
 """
+# Comment-only change to include the DAG path in workflow change detection.
 import hashlib
 import json
 import logging
